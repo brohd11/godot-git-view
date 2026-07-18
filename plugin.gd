@@ -4,7 +4,7 @@ extends EditorPlugin
 ## Owns the script-editor diff gutter, driven by the shared GitService (registered as a consumer).
 ## The main-screen scaffolding below is a stub for the eventual full-screen git view.
 
-const DiffGutter = preload("res://addons/git_view/src/git_diff_gutter.gd")
+const DiffGutter = preload("res://addons/git_view/src/diff_gutter/git_diff_gutter.gd")
 
 var diff_gutter:DiffGutter
 
