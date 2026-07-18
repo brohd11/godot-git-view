@@ -8,10 +8,12 @@ extends Node
 
 const UtilsRemote = preload("res://addons/git_view/src/util/utils_remote.gd")
 
+const ScriptListManager = UtilsRemote.ScriptListManager
+
 const GitUtil = UtilsRemote.GitUtil
 const GitDiff = UtilsRemote.GitDiff
 
-const GUTTER_NAME = &"script_outline_git_diff"
+const GUTTER_NAME = &"git_view_git_diff"
 
 ## ScriptTextEditor's connection_gutter is a plain int cached at construction and never revisited —
 ## insert at or before it and the editor quietly draws its signal icons into this gutter. Going in
@@ -63,11 +65,11 @@ func _ready() -> void:
 	_debounce.wait_time = RECOMPUTE_DEBOUNCE
 	_debounce.timeout.connect(_on_debounce_timeout)
 	add_child(_debounce)
-
-	ScriptEditorRef.subscribe(ScriptEditorRef.Event.EDITOR_SCRIPT_CHANGED, _on_editor_script_changed)
-
+	
+	ScriptEditorRef.subscribe(ScriptEditorRef.Event.TAB_CHANGED, _on_script_editor_tab_changed, 1)
+	
 	# initialize
-	_attach_current()
+	_attach_current_code_edit()
 
 
 #region lifecycle
@@ -77,7 +79,7 @@ func set_repos(repos:Array[String]) -> void:
 	_repos = repos.duplicate()
 	# which repo owns a path may have just changed, and with it every baseline read from one
 	_baselines.clear()
-	_attach_current()
+	_attach_current_code_edit()
 
 
 ## A commit is a new baseline, and nothing else about a repo can make one stale — so compare the oid
@@ -114,24 +116,33 @@ func _teardown() -> void:
 
 #region attaching
 
-func _attach_current() -> void:
-	_attach(ScriptEditorRef.get_current_code_edit(), ScriptEditorRef.get_current_script())
+# using tab changed allows for any text doc type
+func _on_script_editor_tab_changed():
+	_attach_current_def.call_deferred()
 
+func _attach_current_code_edit():
+	_attach_current_def.call_deferred()
 
-# null is docs
-func _on_editor_script_changed(script) -> void:
-	if script == null:
+func _attach_current_def():
+	var sl_man = ScriptListManager.get_instance()
+	sl_man.get_current_script_editor()
+	var current_editor = sl_man.get_current_script_editor()
+	if not is_instance_valid(current_editor):
 		return
-	_attach(ScriptEditorRef.get_current_code_edit(), script)
+	if not current_editor.has_method("get_base_editor"):
+		return # excludes help docs
+	var code_edit = current_editor.get_base_editor()
+	var item_path = sl_man.get_current_item_data().get(ScriptListManager.Keys.TOOLTIP, "")
+	print(code_edit,"::" ,item_path)
+	_attach(code_edit, item_path)
 
 
-func _attach(code_edit:CodeEdit, script) -> void:
-	if not is_instance_valid(code_edit) or not is_instance_valid(script):
+func _attach(code_edit:CodeEdit, path:String) -> void:
+	if not is_instance_valid(code_edit):
 		return
 	
 	_prune()
 	
-	var path:String = script.resource_path
 	if path.is_empty() or path.contains("::"): # "::" -> tscn script, nah
 		return
 	
