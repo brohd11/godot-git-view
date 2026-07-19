@@ -535,7 +535,11 @@ func _build_minimap_rects(code_edit:CodeEdit, state:Dictionary, geometry:Diction
 # Where the minimap draws a line, counted in rows from the first drawn line (which sits at pixel 0).
 # get_visible_line_count_in_range() makes this arithmetic rather than a search, folds and wraps included.
 func _minimap_y(code_edit:CodeEdit, geometry:Dictionary, line:int) -> float:
-	var first:int = geometry[Keys.FIRST_LINE]
+	# markers are rebuilt on a debounce, so on a fresh deletion they can still index a line
+	# the buffer no longer has — get_visible_line_count_in_range errors on that, so clamp
+	var last = code_edit.get_line_count() - 1
+	var first:int = clampi(geometry[Keys.FIRST_LINE], 0, last)
+	line = clampi(line, 0, last)
 	var rows:int
 	if line >= first:
 		rows = code_edit.get_visible_line_count_in_range(first, line) - 1
