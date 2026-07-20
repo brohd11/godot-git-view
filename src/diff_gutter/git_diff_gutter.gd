@@ -57,6 +57,7 @@ var setting_helper:SettingHelperEditor
 var _show_ignored:bool = true
 ## Untracked but not ignored defaults to FULL — every line of it really is uncommitted.
 var _untracked_mode:int = Mode.DIM
+var _untracked_dim_color:Color
 
 const WASH_ALPHA = 0.5
 ## Gray for what git will never track, green for what it has simply not seen yet — derived from
@@ -83,6 +84,7 @@ var _thread:Thread
 # the one queued baseline request, as [res_path, repo] — see _start_work()
 var _pending:Array = []
 
+var git_service:GitService
 
 func _ready() -> void:
 	_debounce = Timer.new()
@@ -90,6 +92,8 @@ func _ready() -> void:
 	_debounce.wait_time = RECOMPUTE_DEBOUNCE
 	_debounce.timeout.connect(_on_debounce_timeout)
 	add_child(_debounce)
+	
+	git_service = GitService.get_instance()
 	
 	ScriptEditorRef.subscribe(ScriptEditorRef.Event.TAB_CHANGED, _on_script_editor_tab_changed, 1)
 	
@@ -99,6 +103,7 @@ func _ready() -> void:
 	setting_helper.initialize()
 	
 	setting_helper.settings_changed.connect(apply_settings, 1)
+	_set_untracked_color()
 	# initialize
 	_attach_current_code_edit()
 
@@ -134,12 +139,15 @@ func head_moved(repo_dir:String, oid:String) -> void:
 ## The baselines deliberately survive: no setting can make a `git show` result stale, and re-reading
 ## every open file off-thread to change a color would be waste.
 func apply_settings() -> void:
+	_set_untracked_color()
 	for id in _editors:
 		_editors[id][Keys.CACHE_KEY] = null
 	_refresh_all()
 	# OFF is the one mode with no gutter column at all, so crossing it either way re-attaches
 	_attach_current_code_edit()
 
+func _set_untracked_color():
+	_untracked_dim_color = Color(git_service.colors.untracked, WASH_ALPHA)
 
 func clean_up() -> void:
 	_teardown()
@@ -217,7 +225,7 @@ func _attach(code_edit:CodeEdit, path:String) -> void:
 		state[Keys.MARKERS] = PackedByteArray()
 		state[Keys.HUNKS] = []
 		state[Keys.NO_BASELINE] = false
-		state[Keys.WASH_COLOR] = COLOR_WASH_IGNORED
+		state[Keys.WASH_COLOR] = git_service.colors.ignored
 		state[Keys.VERSION] = 0
 		state[Keys.CACHE] = []
 		state[Keys.CACHE_KEY] = null
@@ -337,11 +345,11 @@ func _draw_gutter(line:int, _gutter:int, rect:Rect2, code_edit:CodeEdit) -> void
 	# here once per row per frame.
 	if mask & GitDiff.Marker.NO_BASELINE:
 		_draw_clamped(code_edit, Rect2(rect.position, Vector2(BAR_WIDTH * scale, rect.size.y)),
-			state.get(Keys.WASH_COLOR, COLOR_WASH_IGNORED), bounds)
+			state.get(Keys.WASH_COLOR, git_service.colors.ignored), bounds)
 		return
 
 	if mask & (GitDiff.Marker.ADDED | GitDiff.Marker.MODIFIED):
-		var color = COLOR_MODIFIED if mask & GitDiff.Marker.MODIFIED else COLOR_ADDED
+		var color = git_service.colors.modified if mask & GitDiff.Marker.MODIFIED else COLOR_ADDED
 		_draw_clamped(code_edit, Rect2(rect.position, Vector2(BAR_WIDTH * scale, rect.size.y)),
 			color, bounds)
 
@@ -519,7 +527,7 @@ func _build_minimap_rects(code_edit:CodeEdit, state:Dictionary, geometry:Diction
 		var rect := Rect2(x, top, bar_width, tick_height)
 		if mask & GitDiff.Marker.NO_BASELINE:
 			# one run for the whole file, the coalescing above having already collapsed it
-			color = state.get(Keys.WASH_COLOR, COLOR_WASH_IGNORED)
+			color = state.get(Keys.WASH_COLOR, git_service.colors.ignored)
 			rect = Rect2(x, top, bar_width, bottom - top)
 		elif mask & (GitDiff.Marker.ADDED | GitDiff.Marker.MODIFIED):
 			color = COLOR_MODIFIED if mask & GitDiff.Marker.MODIFIED else COLOR_ADDED
@@ -592,7 +600,7 @@ func _mode_for(head:int) -> int:
 # Which muted color a wash uses — the whole point of separating IGNORED from ABSENT, since the two
 # would otherwise be the same fact by the time anything draws.
 func _wash_color(head:int) -> Color:
-	return COLOR_WASH_IGNORED if head == GitUtil.Head.IGNORED else COLOR_WASH_UNTRACKED
+	return git_service.colors.ignored if head == GitUtil.Head.IGNORED else _untracked_dim_color
 
 
 # Resolves the editor's buffer against its baseline. Cheap enough for a keystroke's debounce: the
