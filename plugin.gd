@@ -71,10 +71,8 @@ func _exit_tree() -> void:
 # baselines when HEAD moves.
 func _on_git_status_updated(repo_dir:String) -> void:
 	if is_instance_valid(diff_gutter):
-		# for repo_dir, not for whichever repo the panel is pointed at — status_updated fires for every
-		# repo now, and get_branch_oid() would hand each of them current_repo's oid. The gutter stores
-		# that per repo and compares it next time, so a wrong oid here silently suppresses a real
-		# baseline flush later.
+		# for repo_dir, not the panel's current repo — status_updated fires for every repo and
+		# get_branch_oid() hands back current_repo's oid; a wrong oid stored here silently suppresses a real flush later
 		diff_gutter.head_moved(repo_dir, GitService.get_instance().get_branch_oid_for(repo_dir))
 
 

@@ -3,9 +3,9 @@ extends RefCounted
 ## Where the script editor's minimap is currently drawing, so more than one overlay can paint onto it
 ## and agree on where a line sits.
 ##
-## The minimap draws glyphs and nothing else — it has no notion of a gutter, so anything extra has to
-## be painted over it from the CodeEdit's `draw` signal, which fires after TextEdit's own _draw.
-## Everything here is static: it holds no state, it only measures the CodeEdit it is handed.
+## The minimap draws glyphs only — no gutter — so anything extra is painted over it from the CodeEdit's
+## `draw` signal, which fires after TextEdit's own _draw. All static: no state, it only measures the
+## CodeEdit it is handed.
 
 ## unscaled px of the lane down the minimap's left edge that the diff bars own. Anything else drawing
 ## on the minimap starts after it, or it paints over them.
@@ -14,10 +14,9 @@ const BAR_LANE = 3
 
 ## What the minimap is currently showing, as a row height and the first line it draws.
 ##
-## Positions are measured from that first line, never from a probe that moves with the scroll:
-## get_minimap_line_at_pos() folds the fractional part of the scroll into its answer, so a fixed probe
-## pixel flips by a line as you scroll even while a fitting minimap sits still — which is what jittered.
-##
+## Positions are measured from that first line, never from a probe that moves with the scroll —
+## get_minimap_line_at_pos() folds the fractional scroll into its answer, so a fixed probe pixel flips
+## by a line as you scroll even while a fitting minimap sits still, which is what jittered.
 ## Empty when the minimap has no room to draw.
 #! keys h:int content_bottom:float first_line:int
 static func geometry(code_edit:CodeEdit) -> Dictionary:
@@ -37,18 +36,16 @@ static func geometry(code_edit:CodeEdit) -> Dictionary:
 	var h_approx = (code_edit.size.y - margin - margin_bottom) / float(capacity)
 	var span = drawn * h_approx
 
-	# measured, not modelled: the margin and the scroll fraction are constant additions, so they cancel
-	# in a difference. Probed at fractions of the drawn span, not fixed offsets, so both points land on a
-	# real line even on a short file — a probe past the last line clamps to it and inflates the height.
+	# measured, not modelled: margin and scroll fraction are constant additions, so they cancel in a difference.
+	# Probed at fractions of the drawn span — a probe past the last line clamps to it and inflates the height.
 	var ya = int(margin + span * 0.2)
 	var yb = int(margin + span * 0.8)
 	var la = code_edit.get_minimap_line_at_pos(Vector2i(0, ya))
 	var lb = code_edit.get_minimap_line_at_pos(Vector2i(0, yb))
 	var between = code_edit.get_visible_line_count_in_range(la, lb) - 1
 	var h_float = h_approx if between <= 0 else (yb - ya) / float(between)
-	# an integer row height for positioning: it puts the row boundaries on whole pixels, so the anchor
-	# probe lands cleanly on one and get_minimap_line_at_pos does not flip it back and forth on a scroll.
-	# the float is kept only for the content extent below, which never feeds the probe.
+	# integer row height so row boundaries sit on whole pixels and the anchor probe does not flip on a scroll.
+	# The float is kept only for the content extent below, which never feeds the probe.
 	var h = maxi(1, int(round(h_float)))
 	var content_bottom = drawn * h_float
 
@@ -56,11 +53,10 @@ static func geometry(code_edit:CodeEdit) -> Dictionary:
 	# it is a hard 0 — no scroll-sensitive probe, nothing for a mark to jitter with.
 	var first_line = 0
 	if code_edit.get_total_visible_line_count() > capacity:
-		# get_minimap_line_at_pos answers floor((y - margin)/h + scroll_fraction), so it is steady only
-		# where (y - margin) is a whole multiple of the row height — off a multiple the fraction tips the
-		# floor across a line as you scroll, which is the jitter. Probe the FIRST full row below the margin
-		# (y - margin == h, a multiple, and clear of the top edge where y == margin dips on a low fraction),
-		# median a ±1px window to absorb any rounding when h is not exactly integral, then drop that one row.
+		# steady only where (y - margin) is a whole multiple of h — off one, the scroll fraction tips the
+		# floor and jitters — so probe the first full row below the margin and median ±1px.
+		# QUIRK, and a trap: the answered line is treated as pixel 0, NOT shifted back by the margin — deliberate,
+		# it lands marks on glyphs; the margin is real to the query, not the paint. Trust the screen over the query.
 		var c: int = int(margin) + h
 		var samples: PackedInt32Array = [
 			code_edit.get_minimap_line_at_pos(Vector2i(0, c - 1)),
@@ -104,8 +100,7 @@ static func left_x(code_edit:CodeEdit) -> float:
 
 
 ## Where the drawn content ends, for the bottom clamp. Not code_edit.size.y: a short file's minimap ends
-## well above the bottom, and a long one is inset by the bottom margin — either way a mark past it should
-## clip, not fill down.
+## well above the bottom and a long one is inset by the bottom margin — a mark past it should clip, not fill.
 static func bottom(code_edit:CodeEdit, geo:Dictionary) -> float:
 	var margin_bottom = code_edit.get_theme_stylebox(&"normal").get_margin(SIDE_BOTTOM)
 	return minf(code_edit.size.y - margin_bottom, geo[Keys.CONTENT_BOTTOM])

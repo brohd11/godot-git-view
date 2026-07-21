@@ -2,9 +2,9 @@ extends Node
 
 ## Marks the script editor's gutter with what has changed since the last commit.
 ##
-## Diffs HEAD against the editor's buffer, not the file on disk: the baseline comes from
-## `git show HEAD:<path>`, the diff from GitDiff. Hunks are kept per editor even though only the
-## markers are drawn — the diff preview reads them rather than diffing the same buffer twice.
+## Diffs HEAD against the editor's buffer, not the file on disk: the baseline is `git show
+## HEAD:<path>`, the diff GitDiff. Hunks are kept per editor so the diff preview reads them
+## rather than diffing the same buffer twice.
 
 const UtilsLocal = preload("res://addons/git_view/src/util/utils_local.gd")
 const UtilsRemote = preload("res://addons/git_view/src/util/utils_remote.gd")
@@ -135,12 +135,10 @@ func head_moved(repo_dir:String, oid:String) -> void:
 	_refresh_all()
 
 
-## Call after changing _show_ignored or _untracked_mode. What is drawn is as much a function of the
-## settings as of the buffer, and a settings change touches neither the text nor a baseline — so
-## nothing would otherwise bump VERSION, and the minimap cache would keep serving the old rects.
+## Call after changing _show_ignored or _untracked_mode. A settings change touches neither the text
+## nor a baseline, so nothing would bump VERSION and the minimap cache would keep serving old rects.
 ##
-## The baselines deliberately survive: no setting can make a `git show` result stale, and re-reading
-## every open file off-thread to change a color would be waste.
+## The baselines survive on purpose: no setting can make a `git show` result stale.
 func apply_settings() -> void:
 	_set_untracked_color()
 	for id in _editors:
@@ -338,14 +336,11 @@ func _draw_gutter(line:int, _gutter:int, rect:Rect2, code_edit:CodeEdit) -> void
 		return
 
 	var scale = EditorInterface.get_editor_scale()
-	# the first and last rows on screen are half rows but the rect handed over is whole, so it hangs
-	# over the edge — and clip_contents is false here, so anything past it lands on the scrollbar
+	# edge rows are half-height but the rect is whole, and clip_contents is false — anything past it lands on the scrollbar
 	var bounds = Rect2(Vector2.ZERO, code_edit.size)
 
-	# the whole file wears this one and nothing else, so it answers for the row on its own.
-	# Defaulted, not indexed: a hot-reload rebinds live instances to the new script while keeping the
-	# state they already had, so an entry built before WASH_COLOR existed would otherwise hard-error
-	# here once per row per frame.
+	# the whole file wears this one and nothing else. Defaulted, not indexed: a hot-reload keeps old
+	# state, so an entry built before WASH_COLOR existed would otherwise hard-error once per row per frame
 	if mask & GitDiff.Marker.NO_BASELINE:
 		_draw_clamped(code_edit, Rect2(rect.position, Vector2(BAR_WIDTH * scale, rect.size.y)),
 			state.get(Keys.WASH_COLOR, git_service.colors.ignored), bounds)
@@ -374,10 +369,8 @@ func _draw_clamped(code_edit:CodeEdit, rect:Rect2, color:Color, bounds:Rect2) ->
 		code_edit.draw_rect(clipped, color)
 
 
-# The same markers down the minimap, where the gutter cannot reach. Runs on the CodeEdit's draw
-# signal, which fires after TextEdit drew itself, so this paints over the minimap — and the CodeEdit
-# is not ours to free, hence the disconnect in _detach(). A caret blink redraws twice a second on an
-# untouched editor, hence the cache.
+# The same markers down the minimap, where the gutter cannot reach; draw fires after TextEdit's own,
+# so this paints on top. Caret blinks redraw twice a second on an untouched editor — hence the cache.
 func _draw_minimap(code_edit:CodeEdit) -> void:
 	var state:Dictionary = _editors.get(code_edit.get_instance_id(), {})
 	# hunks and not markers: an unmodified file is the common case and this is the whole cost of it.
@@ -393,9 +386,8 @@ func _draw_minimap(code_edit:CodeEdit) -> void:
 		code_edit.draw_rect(entry[0], entry[1])
 
 
-# The marks as [Rect2, Color], from the cache when nothing that moves them has changed. The key is
-# what the geometry is a function of and nothing else — notably the anchor line rather than
-# get_v_scroll(), since the minimap only moves in whole rows and the raw float would miss every frame.
+# The marks as [Rect2, Color], from the cache when nothing that moves them has changed. The key uses
+# the anchor line, not get_v_scroll(): the minimap moves in whole rows and the raw float would miss every frame.
 func _minimap_rects(code_edit:CodeEdit, state:Dictionary) -> Array:
 	var geometry = MinimapGeometry.geometry(code_edit)
 	if geometry.is_empty():
@@ -593,9 +585,8 @@ func _baseline_task(res_path:String, repo_dir:String, oid:String) -> void:
 func _on_baseline_ready(res_path:String, repo_dir:String, oid:String, result:Dictionary) -> void:
 	_join_thread()
 
-	# a commit landing while the read was in flight makes this the previous baseline. Guarded by oid
-	# and not by "is this still the current tab": a result for a tab the user has left is not stale,
-	# it is a cache entry they are about to want back.
+	# a commit landing mid-read makes this the previous baseline. Guarded by oid, not "is this the current
+	# tab": a result for a tab the user left is a cache entry they are about to want back
 	if _repo_oids.get(repo_dir, "") == oid:
 		_baselines[res_path] = {
 			Keys.REPO: repo_dir,

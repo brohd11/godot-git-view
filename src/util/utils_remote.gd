@@ -2,7 +2,6 @@
 
 const GitUtil = GitService.GitUtil
 const GitDiff = GitService.GitDiff
-const GlyphIcons = preload("uid://dvguymko6if63") #! resolve GitService.GlyphIcons
 
 const NUItemList = ALibRuntime.NodeUtils.NUItemList
 const FSSmallPopup = preload("uid://1gdu201y6jro") #! resolve ALibEditor.FileSystem.Component.SmallPopup

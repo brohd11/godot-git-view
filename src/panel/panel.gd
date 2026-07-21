@@ -11,12 +11,11 @@ const UtilsRemote = preload("res://addons/git_view/src/util/utils_remote.gd")
 const UControl = UtilsRemote.UControl
 const TabBarContainer = UtilsRemote.TabBarContainer
 
-const UtilsLocal = preload("res://addons/script_dock/src/utils/utils_local.gd")
+const UtilsLocal = preload("res://addons/git_view/src/util/utils_local.gd")
 
 const GitUtil = UtilsRemote.GitUtil
-const ChangeList = preload("res://addons/git_view/src/panel/change_simple.gd")
-const GitChangeList = preload("res://addons/script_dock/src/git/git_change_list.gd")
-const GitCommitList = preload("res://addons/script_dock/src/git/git_commit_list.gd")
+const ChangeList = preload("res://addons/git_view/src/panel/change_list.gd")
+const CommitList = preload("res://addons/git_view/src/panel/commit_list.gd")
 
 const MAIN_REPO = "res://"
 const MAIN_REPO_TITLE = "Project"
@@ -26,9 +25,8 @@ var branch_row:HBoxContainer
 var branch_label:Label
 var divergence_label:Label
 var tab_container:TabBarContainer
-var change_ls:ChangeList
-var change_list:GitChangeList
-var commit_list:GitCommitList
+var change_list:ChangeList
+var commit_list:CommitList
 
 # the shared data provider — bound in _ready, the source of every value rendered here
 var _git:GitService
@@ -55,14 +53,12 @@ func _ready() -> void:
 	repo_option_button.item_selected.connect(_on_repo_selected)
 	add_child(repo_option_button)
 
-	# the tooltip goes on the row, not either Label: Label sets mouse_filter to IGNORE, so a tooltip on
-	# one would never fire — and that same IGNORE lets the mouse fall through to the row
+	# the tooltip goes on the row, not a Label — Labels are MOUSE_FILTER_IGNORE, so one there never fires
 	branch_row = HBoxContainer.new()
 	branch_row.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(branch_row)
 
-	# the branch name gives way: an ellipsis eats the end of a string, so a combined label would
-	# truncate the divergence, the half worth acting on
+	# the branch name gives way: ellipsis trims the end of a string, so a combined label would eat the divergence — the half worth acting on
 	branch_label = Label.new()
 	branch_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	branch_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -75,28 +71,22 @@ func _ready() -> void:
 	add_child(tab_container)
 	UControl.expand(tab_container)
 	
-	change_ls = ChangeList.new()
-	change_ls.name = "Changes"
-	#change_ls.changes_command.connect(_on_changes_command)
-	tab_container.add_tab(change_ls)
-	UtilsLocal.set_item_list_sb(change_ls)
+	change_list = ChangeList.new()
+	change_list.name = "Changes"
+	change_list.changes_command.connect(_on_changes_command)
+	tab_container.add_tab(change_list)
+	UtilsLocal.set_item_list_sb(change_list)
 
-	#change_list = GitChangeList.new()
-	#change_list.name = "Changes"
-	#change_list.changes_command.connect(_on_changes_command)
-	#tab_container.add_tab(change_list)
-	#UtilsLocal.set_item_list_sb(change_list)
-
-	commit_list = GitCommitList.new()
+	commit_list = CommitList.new()
 	commit_list.name = "Commits"
 	tab_container.add_tab(commit_list)
 	UtilsLocal.set_item_list_sb(commit_list)
 
-	# a row picks its status texture up when it is built, so rows built before the bake landed — or
-	# before a re-bake after the editor's font changed — are still drawing the letter as a string
+	# the change list looks its status texture up at draw time, so a bake landing later only needs a
+	# repaint — the rows themselves are already right
 	var glyph_icons = GitService.get_glyph_icons_node()
 	if is_instance_valid(glyph_icons):
-		glyph_icons.generated.connect(_rebuild_change_list)
+		glyph_icons.generated.connect(change_list.queue_redraw)
 
 	# GitService is registered by ScriptDock before the sidebar is built, so it is ready here
 	_bind_service()
@@ -139,8 +129,7 @@ func _apply_dock_data() -> void:
 func clean_up() -> void:
 	if not is_instance_valid(_git):
 		return
-	# the service outlives this panel (enable_git_panel off, or another consumer holds it), so drop
-	# these connections rather than let it emit into a freed node
+	# the service outlives this panel, so drop these connections rather than let it emit into a freed node
 	if _git.status_updated.is_connected(_on_status_updated):
 		_git.status_updated.disconnect(_on_status_updated)
 	if _git.commits_updated.is_connected(_on_commits_updated):
@@ -170,10 +159,10 @@ func _on_repo_selected(idx:int) -> void:
 	_git.set_repo(repo_dir)
 
 
-# Don't leave one repo's rows up while another's data is in flight — the branch least of all, since
-# the old one under the new repo's name is a worse lie than showing nothing.
+# Don't leave one repo's rows up while another's data is in flight — the old branch under the new
+# repo's name is a worse lie than showing nothing.
 func _clear_lists() -> void:
-	#change_list.clear_changes()
+	change_list.clear()
 	commit_list.clear_commits()
 
 	branch_label.text = ""
@@ -186,8 +175,8 @@ func _on_status_updated(_repo_dir:String) -> void:
 	_update_repo_info()
 
 
-# Spawns nothing: everything comes out of the status and log GitService already fetched. Reading
-# `commits` here is not a frame behind — the service assigns both members before it emits either signal.
+# Spawns nothing: reads the status and log GitService already fetched — it assigns both members
+# before emitting either signal, so `commits` here is not a frame behind.
 func _update_repo_info() -> void:
 	var info = GitUtil.get_repo_info(_git.status, _git.commits)
 	var branch:Dictionary = info[GitUtil.Keys.BRANCH]
@@ -212,17 +201,13 @@ func _on_commits_updated(_repo_dir:String) -> void:
 
 
 func _rebuild_change_list() -> void:
-	#change_list.clear_changes()
 	if not is_instance_valid(_git):
 		return
 
 	var files:Dictionary = _git.status.get(GitUtil.Keys.FILES, {})
 	var paths = files.keys()
 	paths.sort()
-	change_ls.set_files(paths)
-
-	#for path:String in paths:
-		#change_list.add_change(path, _git.current_repo, files[path])
+	change_list.set_files(paths)
 
 
 func _rebuild_commit_list() -> void:

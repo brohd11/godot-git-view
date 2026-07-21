@@ -19,8 +19,6 @@ const ScriptListManager = UtilsRemote.ScriptListManager
 const LABEL_FONT_SIZE_MIN = 9
 ## The one number to turn if the labels read too small, or start swamping the code they sit on.
 const LABEL_FONT_SIZE_MAX = 10
-## most lines a wrapped name may occupy
-const LABEL_MAX_LINES = 1
 
 ## unscaled px of air inside the backing rect
 const LABEL_PAD_H = 3
@@ -29,10 +27,10 @@ const LABEL_PAD_V = 2
 ## The label is over the code the minimap is there to show, so it does not get to be opaque.
 const LABEL_ALPHA = 0.9
 ## ...and neither does the rect behind it, which dims that code rather than replacing it
-const LABEL_BACK_ALPHA = 0.85
+const LABEL_BACK_ALPHA = 0.7
 
 ## Time before rescanning on text changed
-const RESCAN_DEBOUNCE = 0.2
+const RESCAN_DEBOUNCE = 0.5
 
 var setting_helper:SettingHelperEditor
 
@@ -165,7 +163,7 @@ func _on_text_changed(code_edit:CodeEdit) -> void:
 	if not is_instance_valid(code_edit):
 		return
 	_dirty[code_edit.get_instance_id()] = true
-	_debounce.start()
+	_debounce.start(RESCAN_DEBOUNCE)
 
 
 func _on_debounce_timeout() -> void:
@@ -192,10 +190,9 @@ func _rescan(id:int) -> void:
 
 
 # The file's regions in start order, as {START, END, DEPTH, NAME}. CodeEdit answers only "does this
-# line open/close one", so the nesting is ours to track.
-#
-# END is unread today — nothing draws a span yet — but resolving it here is what lets a colored span
-# be added later without walking the buffer again, and DEPTH is what an innermost-wins pass sorts on.
+# line open/close one", so the nesting is ours to track. END is unread today — nothing draws a span —
+# but resolving it here lets one be added later without walking the buffer again, and DEPTH is what
+# an innermost-wins pass sorts on.
 func _scan(code_edit:CodeEdit) -> Array:
 	var regions:Array = []
 	var open:Array = [] # indices into regions, innermost last
@@ -217,9 +214,8 @@ func _scan(code_edit:CodeEdit) -> Array:
 	return regions
 
 
-# Everything after the start tag on the line. The tag is the bare word ("region"), the comment
-# delimiter being the editor's business — but find() past it works either way, so a tag arriving as
-# "#region" needs no special case.
+# Everything after the start tag on the line. The tag is the bare word ("region"); find() past it
+# works either way, so a tag arriving as "#region" needs no special case.
 func _region_name(code_edit:CodeEdit, line:int) -> String:
 	var text = code_edit.get_line(line)
 	var tag = code_edit.get_code_region_start_tag()
@@ -233,9 +229,8 @@ func _region_name(code_edit:CodeEdit, line:int) -> String:
 
 #region drawing
 
-# Runs on the CodeEdit's draw signal, which fires after TextEdit drew itself — and the CodeEdit is not
-# ours to free, hence the disconnect in _detach_signals(). A caret blink redraws twice a second on an
-# untouched editor, hence the cache.
+# Runs on the CodeEdit's draw signal, after TextEdit drew itself; the CodeEdit is not ours to free,
+# hence the disconnect in _detach_signals(). A caret blink redraws twice a second, hence the cache.
 func _draw_regions(code_edit:CodeEdit) -> void:
 	if not _enabled:
 		return
@@ -254,19 +249,14 @@ func _draw_regions(code_edit:CodeEdit) -> void:
 
 	# every measurement was made in _build_labels and cached — this loop only paints
 	for block in _labels(code_edit, state, font):
-		#code_edit.draw_rect(block[Keys.RECT], back_color)
-
-		var font_size:int = block[Keys.FONT_SIZE]
-		var line_height = font.get_height(font_size)
-		var origin:Vector2 = block[Keys.ORIGIN]
-		for i in block[Keys.LINES].size():
-			code_edit.draw_string(font, origin + Vector2(0, i * line_height), block[Keys.LINES][i],
-				HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, color)
+		code_edit.draw_rect(block[Keys.RECT], back_color)
+		code_edit.draw_string(font, block[Keys.ORIGIN], block[Keys.TEXT],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, block[Keys.FONT_SIZE], color)
 
 
 # The label blocks, from the cache when nothing that moves them has changed. The key is what the
-# geometry is a function of and nothing else — notably the anchor line rather than get_v_scroll(),
-# since the minimap only moves in whole rows and the raw float would miss every frame.
+# geometry is a function of — the anchor line rather than get_v_scroll(), since the minimap only
+# moves in whole rows and the raw float would miss every frame.
 func _labels(code_edit:CodeEdit, state:Dictionary, font:Font) -> Array:
 	var geometry = MinimapGeometry.geometry(code_edit)
 	if geometry.is_empty():
@@ -291,16 +281,20 @@ func _labels(code_edit:CodeEdit, state:Dictionary, font:Font) -> Array:
 func _build_labels(code_edit:CodeEdit, state:Dictionary, geometry:Dictionary, font:Font) -> Array:
 	var labels:Array = []
 	var scale = EditorInterface.get_editor_scale()
+	
+	var pad_h_scaled = LABEL_PAD_H * scale
+	var bar_lane_scaled = MinimapGeometry.BAR_LANE * scale
 
 	# past the lane the diff bars own, so a label never hides one
-	var rect_x = MinimapGeometry.left_x(code_edit) + MinimapGeometry.BAR_LANE * scale
-	var rect_w = code_edit.get_minimap_width() - MinimapGeometry.BAR_LANE * scale
-	var avail = rect_w - 2 * LABEL_PAD_H * scale
+	var rect_x = MinimapGeometry.left_x(code_edit) + bar_lane_scaled
+	var rect_w = code_edit.get_minimap_width() - bar_lane_scaled
+	
+	var avail = rect_w - 2 * pad_h_scaled
 	if avail <= 0.0:
 		return labels
 
 	var bottom = MinimapGeometry.bottom(code_edit, geometry)
-	var pad_v = LABEL_PAD_V * scale
+	var pad_v_scaled = LABEL_PAD_V * scale
 
 	# regions come out of _scan in start order, so one pass places them top-down
 	var last_bottom := -INF
@@ -310,12 +304,17 @@ func _build_labels(code_edit:CodeEdit, state:Dictionary, geometry:Dictionary, fo
 			continue # nothing to label
 
 		var layout = _layout(name_text, font, avail)
-		var lines:PackedStringArray = layout[Keys.LINES]
+		var text:String = layout[Keys.TEXT]
 		var font_size:int = layout[Keys.FONT_SIZE]
-		var block_h = lines.size() * font.get_height(font_size) + 2 * pad_v
+
+		# measure THIS string — the one that gets drawn, already ellipsized; the raw name would size the
+		# rect for text that is not there
+		var ascent = font.get_ascent(font_size)
+		var text_w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var block_h = font.get_height(font_size) + 2 * pad_v_scaled
 
 		# the block straddles its line rather than hanging under it: anchoring the top puts the label's
-		# centre half a block below the tag it marks, and by more the taller the block gets
+		# centre half a block below the tag it marks
 		var top = MinimapGeometry.line_y(code_edit, geometry, region[Keys.START]) - block_h * 0.5
 		# the block is off the top of the minimap, or would hang past the drawn content
 		if top < 0.0 or top + block_h > bottom:
@@ -326,99 +325,54 @@ func _build_labels(code_edit:CodeEdit, state:Dictionary, geometry:Dictionary, fo
 			continue
 		last_bottom = top + block_h
 
+		# the baseline sits a pad below the block's top, the ascent down from the text's top; the block's
+		# height is ascent + descent + matching pad, so the text is padded equally and the rect cannot drift
+		var text_origin = Vector2(rect_x + pad_h_scaled, top + pad_v_scaled + ascent)
+		# hugs the text rather than running the full width — a short name should not black out the map
+		var block_rect = Rect2(rect_x, top, minf(text_w + 2 * pad_h_scaled, rect_w), block_h)
+
 		labels.append({
-			Keys.RECT: Rect2(rect_x, top, rect_w, block_h),
-			Keys.ORIGIN: Vector2(rect_x + LABEL_PAD_H * scale, top + pad_v + font.get_ascent(font_size)),
-			Keys.LINES: lines,
+			Keys.RECT: block_rect,
+			Keys.ORIGIN: text_origin,
+			Keys.TEXT: text,
 			Keys.FONT_SIZE: font_size,
 		})
 
 	return labels
 
 
-# How to set a name on the minimap: the wrap that lets it grow the most, and how big that is.
-#
-# No char threshold — the split is chosen by what it buys. A long name wraps precisely because
-# wrapping lets it come out bigger, and a short one never does because it cannot.
-#! keys lines:PackedStringArray font_size:int
+# How to set a name on the minimap: one line, sized up to fill the width, ellipsized if it cannot fit
+# even at the floor.
+#! keys text:String font_size:int
 func _layout(text:String, font:Font, avail:float) -> Dictionary:
-	var words = text.split(" ", false)
-	var best:PackedStringArray = PackedStringArray([text])
-	var best_size = 0
+	var size = _size_to_fit(text, font, avail)
+	if size >= _scaled(LABEL_FONT_SIZE_MIN):
+		return {Keys.TEXT: text, Keys.FONT_SIZE: size}
 
-	for n in range(1, mini(LABEL_MAX_LINES, words.size()) + 1):
-		var lines = _split_balanced(words, n)
-		var size = _size_to_fit(lines, font, avail)
-		# strictly greater, so a tie keeps the earlier (fewer-line) split: one big line beats two of
-		# the same size
-		if size > best_size:
-			best_size = size
-			best = lines
-
-	# a single word too long for the width even at the floor — nothing to split, so cut it instead
-	if best_size < _scaled(LABEL_FONT_SIZE_MIN):
-		best_size = _scaled(LABEL_FONT_SIZE_MIN)
-		for i in best.size():
-			best[i] = _fit(best[i], font, best_size, avail)
-
-	return {Keys.LINES: best, Keys.FONT_SIZE: best_size}
+	# too long for the width at a legible size — shrinking further would only make it unreadable AND
+	# still not fit, so hold the floor and cut the text instead
+	size = _scaled(LABEL_FONT_SIZE_MIN)
+	return {Keys.TEXT: _fit(text, font, size, avail), Keys.FONT_SIZE: size}
 
 
-# The words packed into n lines of roughly equal length, so a wrap comes out balanced rather than as
-# one long line and a stub. Greedy toward a per-line target, which is enough at these lengths.
-func _split_balanced(words:PackedStringArray, n:int) -> PackedStringArray:
-	if n <= 1:
-		return PackedStringArray([" ".join(words)])
-
-	var total = 0
-	for word in words:
-		total += word.length() + 1
-	var target = total / float(n)
-
-	var lines:PackedStringArray = []
-	var current = ""
-	for i in words.size():
-		var word = words[i]
-		# the lines still to be STARTED after the one in hand — not counting it, or a two-word name
-		# split in two never breaks — against the words left to start them with
-		var lines_left = n - lines.size() - 1
-		var remaining = words.size() - i
-		if lines_left > 0 and not current.is_empty() and remaining >= lines_left \
-				and current.length() + 1 + word.length() > target:
-			lines.append(current)
-			current = word
-			continue
-		current = word if current.is_empty() else current + " " + word
-	if not current.is_empty():
-		lines.append(current)
-
-	return lines
-
-
-# The largest font size whose widest line still fits, capped at LABEL_FONT_SIZE_MAX. get_string_size
-# is near-linear in the size, so one estimate lands on or beside the answer and the loop only walks
-# off the rounding — no search.
-func _size_to_fit(lines:PackedStringArray, font:Font, avail:float) -> int:
+# The largest font size the text still fits at, capped at LABEL_FONT_SIZE_MAX. get_string_size is
+# near-linear in size, so one estimate lands beside the answer and the loop only walks off the rounding.
+func _size_to_fit(text:String, font:Font, avail:float) -> int:
 	var max_size = _scaled(LABEL_FONT_SIZE_MAX)
-	var widest = 0.0
-	for line in lines:
-		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, max_size).x)
-	if widest <= 0.0:
+	var width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, max_size).x
+	if width <= 0.0:
 		return max_size
 
-	var size = clampi(int(max_size * avail / widest), 1, max_size)
-	while size < max_size and _widest(lines, font, size + 1) <= avail:
+	var size = clampi(int(max_size * avail / width), 1, max_size)
+	while size < max_size and _width_at(text, font, size + 1) <= avail:
 		size += 1
-	while size > 1 and _widest(lines, font, size) > avail:
+	while size > 1 and _width_at(text, font, size) > avail:
 		size -= 1
 	return size
 
 
-func _widest(lines:PackedStringArray, font:Font, font_size:int) -> float:
-	var widest = 0.0
-	for line in lines:
-		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x)
-	return widest
+func _width_at(text:String, font:Font, font_size:int) -> float:
+	return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 
 
 func _scaled(unscaled:int) -> int:
@@ -459,10 +413,10 @@ class Keys:
 	## one label block, as built by _build_labels()
 	## the backing rect, spanning the minimap bar the diff bars' lane
 	const RECT = &"rect"
-	## the baseline of the block's FIRST line; the rest step down by the font's height
+	## the text's baseline, a pad below the rect's top
 	const ORIGIN = &"origin"
-	## also one entry of _layout(): the name, wrapped
-	const LINES = &"lines"
+	## also one entry of _layout(): the name as it will actually be drawn, ellipsized if it had to be
+	const TEXT = &"text"
 	const FONT_SIZE = &"font_size"
 
 	## one entry of REGIONS
