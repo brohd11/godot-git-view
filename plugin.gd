@@ -5,8 +5,13 @@ extends EditorPlugin
 ## The main-screen scaffolding below is a stub for the eventual full-screen git view.
 
 const DiffGutter = preload("res://addons/git_view/src/diff_gutter/git_diff_gutter.gd")
+const GitPanel = preload("res://addons/git_view/src/panel/panel.gd")
+
 
 var diff_gutter:DiffGutter
+var git_panel:GitPanel
+
+var dock_manager:DockManager
 
 
 func _get_plugin_name() -> String:
@@ -34,6 +39,10 @@ func _enter_tree() -> void:
 	gs.status_updated.connect(_on_git_status_updated)
 	# repos_updated already fired during registration, above — sync the current list in
 	diff_gutter.set_repos(gs.repos)
+	
+	await get_tree().process_frame
+	if ScriptDock.instance_valid(): # this could be a nameless check
+		ScriptDock.call_on_ready(ScriptDock.add_section.bind(&"git_view", GitPanel.new()))
 
 
 func _exit_tree() -> void:

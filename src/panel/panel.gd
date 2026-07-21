@@ -14,6 +14,7 @@ const TabBarContainer = UtilsRemote.TabBarContainer
 const UtilsLocal = preload("res://addons/script_dock/src/utils/utils_local.gd")
 
 const GitUtil = UtilsRemote.GitUtil
+const ChangeList = preload("res://addons/git_view/src/panel/change_simple.gd")
 const GitChangeList = preload("res://addons/script_dock/src/git/git_change_list.gd")
 const GitCommitList = preload("res://addons/script_dock/src/git/git_commit_list.gd")
 
@@ -25,6 +26,7 @@ var branch_row:HBoxContainer
 var branch_label:Label
 var divergence_label:Label
 var tab_container:TabBarContainer
+var change_ls:ChangeList
 var change_list:GitChangeList
 var commit_list:GitCommitList
 
@@ -72,12 +74,18 @@ func _ready() -> void:
 	tab_container = TabBarContainer.new()
 	add_child(tab_container)
 	UControl.expand(tab_container)
+	
+	change_ls = ChangeList.new()
+	change_ls.name = "Changes"
+	#change_ls.changes_command.connect(_on_changes_command)
+	tab_container.add_tab(change_ls)
+	UtilsLocal.set_item_list_sb(change_ls)
 
-	change_list = GitChangeList.new()
-	change_list.name = "Changes"
-	change_list.changes_command.connect(_on_changes_command)
-	tab_container.add_tab(change_list)
-	UtilsLocal.set_item_list_sb(change_list)
+	#change_list = GitChangeList.new()
+	#change_list.name = "Changes"
+	#change_list.changes_command.connect(_on_changes_command)
+	#tab_container.add_tab(change_list)
+	#UtilsLocal.set_item_list_sb(change_list)
 
 	commit_list = GitCommitList.new()
 	commit_list.name = "Commits"
@@ -165,7 +173,7 @@ func _on_repo_selected(idx:int) -> void:
 # Don't leave one repo's rows up while another's data is in flight — the branch least of all, since
 # the old one under the new repo's name is a worse lie than showing nothing.
 func _clear_lists() -> void:
-	change_list.clear_changes()
+	#change_list.clear_changes()
 	commit_list.clear_commits()
 
 	branch_label.text = ""
@@ -204,16 +212,17 @@ func _on_commits_updated(_repo_dir:String) -> void:
 
 
 func _rebuild_change_list() -> void:
-	change_list.clear_changes()
+	#change_list.clear_changes()
 	if not is_instance_valid(_git):
 		return
 
 	var files:Dictionary = _git.status.get(GitUtil.Keys.FILES, {})
 	var paths = files.keys()
 	paths.sort()
+	change_ls.set_files(paths)
 
-	for path:String in paths:
-		change_list.add_change(path, _git.current_repo, files[path])
+	#for path:String in paths:
+		#change_list.add_change(path, _git.current_repo, files[path])
 
 
 func _rebuild_commit_list() -> void:
