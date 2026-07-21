@@ -5,10 +5,13 @@ extends EditorPlugin
 ## The main-screen scaffolding below is a stub for the eventual full-screen git view.
 
 const DiffGutter = preload("res://addons/git_view/src/diff_gutter/git_diff_gutter.gd")
+const RegionMinimap = preload("res://addons/git_view/src/minimap/code_region_minimap.gd")
 const GitPanel = preload("res://addons/git_view/src/panel/panel.gd")
 
+const GIT_SECTION = &"GitView"
 
 var diff_gutter:DiffGutter
+var region_minimap:RegionMinimap
 var git_panel:GitPanel
 
 var dock_manager:DockManager
@@ -39,16 +42,28 @@ func _enter_tree() -> void:
 	gs.status_updated.connect(_on_git_status_updated)
 	# repos_updated already fired during registration, above — sync the current list in
 	diff_gutter.set_repos(gs.repos)
+
+	# no GitService signals: the region labels are a navigation aid on any open script, git or not
+	region_minimap = RegionMinimap.new()
+	add_child(region_minimap)
 	
 	await get_tree().process_frame
+	
+	git_panel = GitPanel.new()
+	
 	if ScriptDock.instance_valid(): # this could be a nameless check
-		ScriptDock.call_on_ready(ScriptDock.add_section.bind(&"git_view", GitPanel.new()))
+		ScriptDock.call_on_ready(ScriptDock.add_section.bind(GIT_SECTION, git_panel))
 
 
 func _exit_tree() -> void:
+	ScriptDock.remove_section(GIT_SECTION)
+	git_panel.queue_free()
 	# the gutter added gutters into CodeEdits that outlive us — tear those out before we free
 	if is_instance_valid(diff_gutter):
 		diff_gutter.clean_up()
+	# same for the region labels' draw connections
+	if is_instance_valid(region_minimap):
+		region_minimap.clean_up()
 	GitService.unregister_node(self)
 
 
