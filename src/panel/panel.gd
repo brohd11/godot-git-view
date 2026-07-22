@@ -49,19 +49,21 @@ func set_dock_data(data:Dictionary) -> void:
 
 
 func _ready() -> void:
-	repo_option_button = OptionButton.new()
-	repo_option_button.item_selected.connect(_on_repo_selected)
-	add_child(repo_option_button)
-
-	# the tooltip goes on the row, not a Label — Labels are MOUSE_FILTER_IGNORE, so one there never fires
 	branch_row = HBoxContainer.new()
 	branch_row.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(branch_row)
+	
+	repo_option_button = OptionButton.new()
+	repo_option_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	repo_option_button.item_selected.connect(_on_repo_selected)
+	repo_option_button.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	branch_row.add_child(repo_option_button)
 
 	# the branch name gives way: ellipsis trims the end of a string, so a combined label would eat the divergence — the half worth acting on
 	branch_label = Label.new()
 	branch_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	branch_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	branch_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	branch_row.add_child(branch_label)
 
 	divergence_label = Label.new()
@@ -162,7 +164,9 @@ func _on_repo_selected(idx:int) -> void:
 # Don't leave one repo's rows up while another's data is in flight — the old branch under the new
 # repo's name is a worse lie than showing nothing.
 func _clear_lists() -> void:
-	change_list.clear()
+	# through set_files, not clear(): the rows and the status dict behind them go together, and a
+	# menu built off a dict the rows no longer match is the one thing this must never do
+	change_list.set_files([])
 	commit_list.clear_commits()
 
 	branch_label.text = ""
@@ -182,6 +186,7 @@ func _update_repo_info() -> void:
 	var branch:Dictionary = info[GitUtil.Keys.BRANCH]
 
 	branch_label.text = GitUtil.get_branch_label(branch)
+	branch_label.tooltip_text = GitUtil.format_repo_tooltip(info)
 
 	var divergence = GitUtil.get_divergence_label(branch)
 	divergence_label.text = divergence
@@ -193,7 +198,7 @@ func _update_repo_info() -> void:
 			GitUtil.Colors.L_YELLOW if branch[GitUtil.Keys.BRANCH_BEHIND] > 0
 			else GitUtil.Colors.L_GREEN)
 
-	branch_row.tooltip_text = GitUtil.format_repo_tooltip(info)
+	
 
 
 func _on_commits_updated(_repo_dir:String) -> void:
@@ -207,7 +212,9 @@ func _rebuild_change_list() -> void:
 	var files:Dictionary = _git.status.get(GitUtil.Keys.FILES, {})
 	var paths = files.keys()
 	paths.sort()
-	change_list.set_files(paths)
+	# the dict travels with the rows: it is what decides which commands a selection is offered, and
+	# it has to be the same snapshot the command's pathspecs are built from
+	change_list.set_files(paths, files, _git.current_repo)
 
 
 func _rebuild_commit_list() -> void:

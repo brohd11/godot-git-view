@@ -16,6 +16,13 @@ var icon_overlay:GitDataDraw.GitItemHelper
 
 var right_click_handler:RightClickHandler
 
+# the FILES dict the rows were built from, and the one a command's pathspecs resolve against. Not
+# GitService.get_file_status(): that answers from the repo owning the path, which a nested clone
+# makes a different repo from the one `git -C` will run in.
+var _files:Dictionary = {}
+# the repo those keys are relative to — what turns a row back into something to show the user
+var _repo_dir:String = ""
+
 signal changes_command(command:GitUtil.Command, paths:Array)
 
 
@@ -30,10 +37,12 @@ func _init() -> void:
 	item_clicked.connect(_on_item_clicked)
 	item_activated.connect(_on_item_activated)
 
-func set_files(file_paths:Array):
-	
+func set_files(file_paths:Array, files:Dictionary={}, repo_dir:String=""):
+
 	clear()
-	
+	_files = files
+	_repo_dir = repo_dir
+
 	for p in file_paths:
 		var idx = item_count
 		add_item(p.get_file())
@@ -78,7 +87,7 @@ func _add_command_options(options:Options, selected_paths:Array) -> void:
 		var entry:Dictionary = GitUtil.COMMANDS[command]
 
 		var paths = selected_paths.filter(
-			func(path): return GitUtil.command_accepts(command, git_service.get_file_status(path))
+			func(path): return GitUtil.command_accepts(command, _files.get(path, {}))
 		)
 		if paths.is_empty():
 			continue
@@ -103,7 +112,27 @@ func _command_label(entry:Dictionary, paths:Array, selected_paths:Array) -> Stri
 
 func _changes_command(command:GitUtil.Command, paths:Array):
 	if command in GitUtil.COMMAND_DESTRUCTIVE:
-		var conf = await ALibRuntime.Dialog.confirm("Destructive git command: %s\n Proceed?" % [GitUtil.Command.keys()[command]], self)
-		if not conf:
+		if not await ALibRuntime.Dialog.confirm(_confirm_text(command, paths), self):
 			return
 	changes_command.emit(command, paths)
+
+
+# Discarding a file git reports as deleted *restores* it, so the destructive framing is wrong there —
+# and a bare file name is not enough to recognise the file by, since two dirs can hold the same one.
+func _confirm_text(command:GitUtil.Command, paths:Array) -> String:
+	var label:String = GitUtil.COMMANDS[command][GitUtil.Keys.CMD_LABEL]
+
+	var restores_all = command == GitUtil.Command.DISCARD
+	var lines:Array = []
+	for p:String in paths:
+		var file_data:Dictionary = _files.get(p, {})
+		if file_data.get(GitUtil.Keys.WORKTREE, GitUtil.Status.NONE) != GitUtil.Status.DELETED:
+			restores_all = false
+		lines.append("  %s  (%s)" % [
+			GitUtil.to_repo_path(_repo_dir, p) if not _repo_dir.is_empty() else p,
+			GitUtil.get_status_label(file_data),
+		])
+
+	var heading = ("%s — every file below is deleted on disk, so this restores them from the index:"
+		if restores_all else "Destructive git command: %s\nFiles:") % label
+	return "%s\n%s\n\nProceed?" % [heading, "\n".join(lines)]
