@@ -30,8 +30,7 @@ static func geometry(code_edit:CodeEdit) -> Dictionary:
 	var margin = code_edit.get_theme_stylebox(&"normal").get_margin(SIDE_TOP)
 	var margin_bottom = code_edit.get_theme_stylebox(&"normal").get_margin(SIDE_BOTTOM)
 
-	# the lines the minimap actually paints, and the pixel span they cover. A rough row height from the
-	# capacity is enough to place the probes — the accurate one comes from measuring below.
+	# lines actually painted and their pixel span; the rough height places probes — the accurate one is measured below.
 	var drawn = mini(code_edit.get_total_visible_line_count(), capacity)
 	var h_approx = (code_edit.size.y - margin - margin_bottom) / float(capacity)
 	var span = drawn * h_approx
@@ -44,19 +43,15 @@ static func geometry(code_edit:CodeEdit) -> Dictionary:
 	var lb = code_edit.get_minimap_line_at_pos(Vector2i(0, yb))
 	var between = code_edit.get_visible_line_count_in_range(la, lb) - 1
 	var h_float = h_approx if between <= 0 else (yb - ya) / float(between)
-	# integer row height so row boundaries sit on whole pixels and the anchor probe does not flip on a scroll.
-	# The float is kept only for the content extent below, which never feeds the probe.
+	# integer height so row boundaries sit on whole pixels and the anchor does not flip on scroll; float is kept only for content extent.
 	var h = maxi(1, int(round(h_float)))
 	var content_bottom = drawn * h_float
 
-	# the first line the minimap paints. A fitting file (the common case) never scrolls its minimap, so
-	# it is a hard 0 — no scroll-sensitive probe, nothing for a mark to jitter with.
+	# first line the minimap paints; a fitting file never scrolls, so it stays 0 with no jitter-sensitive probe.
 	var first_line = 0
 	if code_edit.get_total_visible_line_count() > capacity:
-		# steady only where (y - margin) is a whole multiple of h — off one, the scroll fraction tips the
-		# floor and jitters — so probe the first full row below the margin and median ±1px.
-		# QUIRK, and a trap: the answered line is treated as pixel 0, NOT shifted back by the margin — deliberate,
-		# it lands marks on glyphs; the margin is real to the query, not the paint. Trust the screen over the query.
+		# steady only where (y - margin) is a multiple of h; probe the first full row below the margin and median ±1px.
+		# QUIRK: the answered line is treated as pixel 0, not shifted by the margin — the margin is real to the query, not the paint.
 		var c: int = int(margin) + h
 		var samples: PackedInt32Array = [
 			code_edit.get_minimap_line_at_pos(Vector2i(0, c - 1)),
@@ -76,8 +71,7 @@ static func geometry(code_edit:CodeEdit) -> Dictionary:
 ## Where the minimap draws a line, counted in rows from the first drawn line (which sits at pixel 0).
 ## get_visible_line_count_in_range() makes this arithmetic rather than a search, folds and wraps included.
 static func line_y(code_edit:CodeEdit, geo:Dictionary, line:int) -> float:
-	# an overlay's lines are rebuilt on a debounce, so on a fresh deletion they can still index a line
-	# the buffer no longer has — get_visible_line_count_in_range errors on that, so clamp
+	# overlays rebuild on debounce, so a fresh deletion can still reference a gone line — clamp to avoid the error.
 	var last = code_edit.get_line_count() - 1
 	var first:int = clampi(geo[Keys.FIRST_LINE], 0, last)
 	line = clampi(line, 0, last)
@@ -89,8 +83,7 @@ static func line_y(code_edit:CodeEdit, geo:Dictionary, line:int) -> float:
 	return float(rows * int(geo[Keys.H]))
 
 
-## The minimap's left edge. The minimap is hard coded to clear the vertical scrollbar, so that always
-## comes off too.
+## The minimap's left edge, clearing the vertical scrollbar too.
 static func left_x(code_edit:CodeEdit) -> float:
 	var x = code_edit.size.x - code_edit.get_minimap_width()
 	var v_scroll = code_edit.get_v_scroll_bar()
@@ -99,8 +92,7 @@ static func left_x(code_edit:CodeEdit) -> float:
 	return x
 
 
-## Where the drawn content ends, for the bottom clamp. Not code_edit.size.y: a short file's minimap ends
-## well above the bottom and a long one is inset by the bottom margin — a mark past it should clip, not fill.
+## Where drawn content ends, for the bottom clamp. Short files end above the bottom; long files are inset by the margin.
 static func bottom(code_edit:CodeEdit, geo:Dictionary) -> float:
 	var margin_bottom = code_edit.get_theme_stylebox(&"normal").get_margin(SIDE_BOTTOM)
 	return minf(code_edit.size.y - margin_bottom, geo[Keys.CONTENT_BOTTOM])
@@ -111,5 +103,5 @@ class Keys:
 	const H = &"row_height"
 	## the drawn content's pixel extent from the minimap top, for the bottom clamp
 	const CONTENT_BOTTOM = &"content_bottom"
-	## the first line the minimap paints (0 unless it is scrolled), the reference every mark is placed from
+	## the first line the minimap paints (0 unless scrolled); the reference for every mark
 	const FIRST_LINE = &"first_line"

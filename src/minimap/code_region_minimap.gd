@@ -2,9 +2,8 @@ extends Node
 
 ## Writes each `#region`'s name across the script editor's minimap, the way VS Code does.
 ##
-## A navigation aid and not a git signal: it attaches to whatever script is open, in a repo or not,
-## so it shares nothing with the diff gutter but the minimap geometry both draw against. No baseline,
-## no thread, no gutter column — just a line walk on a debounce and a draw.
+## A navigation aid, not a git signal: it attaches to whatever script is open. It shares nothing with
+## the diff gutter except the minimap geometry. No baseline, thread, or gutter — just a walk and a draw.
 
 const UtilsLocal = preload("res://addons/git_view/src/util/utils_local.gd")
 const UtilsRemote = preload("res://addons/git_view/src/util/utils_remote.gd")
@@ -14,27 +13,26 @@ const GeoKeys = MinimapGeometry.Keys
 const SettingHelperEditor = UtilsRemote.SettingHelperEditor
 const ScriptListManager = UtilsRemote.ScriptListManager
 
-## unscaled px. A name is sized up to fill the minimap's width, so these bound the result rather than
-## setting it. The floor is legibility — a name that cannot fit at it is ellipsized, not shrunk on.
+## unscaled px. Bounds, not the chosen size: too small to fit means ellipsize, not shrink.
 const LABEL_FONT_SIZE_MIN = 9
-## The one number to turn if the labels read too small, or start swamping the code they sit on.
+## Raise this if labels read too small or start swamping the code.
 const LABEL_FONT_SIZE_MAX = 10
 
 ## unscaled px of air inside the backing rect
 const LABEL_PAD_H = 3
 const LABEL_PAD_V = 2
 
-## The label is over the code the minimap is there to show, so it does not get to be opaque.
+## Label sits over code, so it is not opaque.
 const LABEL_ALPHA = 0.9
-## ...and neither does the rect behind it, which dims that code rather than replacing it
+## Backing rect dims rather than replaces the code behind it.
 const LABEL_BACK_ALPHA = 0.7
 
-## Time before rescanning on text changed
+## Debounce before rescanning after text changes.
 const RESCAN_DEBOUNCE = 0.5
 
 var setting_helper:SettingHelperEditor
 
-## Set from editor settings
+## Toggled from editor settings.
 var _enabled:bool = true
 
 # CodeEdits we draw on, by instance id; see Keys for an entry's shape
@@ -64,9 +62,8 @@ func _ready() -> void:
 
 #region lifecycle
 
-## Call after changing _enabled. What is drawn is as much a function of the setting as of the buffer,
-## and a settings change touches no text — so nothing would otherwise bump VERSION, and the cache
-## would keep serving the labels the setting just turned off.
+## Call after changing _enabled. A setting change touches no text, so VERSION would not bump and the
+## cache would keep serving labels the setting just turned off.
 func apply_settings() -> void:
 	for id in _editors:
 		_editors[id][Keys.CACHE_KEY] = null
@@ -129,8 +126,7 @@ func _attach(code_edit:CodeEdit) -> void:
 	if not code_edit.text_changed.is_connected(_on_text_changed):
 		code_edit.text_changed.connect(_on_text_changed.bind(code_edit))
 
-	# the minimap draws glyphs and nothing else, so the labels have to be painted over it. The draw
-	# signal fires after TextEdit's own _draw, so this lands on top.
+	# the minimap only draws glyphs; labels paint over it, and draw fires after TextEdit's own _draw.
 	if not code_edit.draw.is_connected(_draw_regions):
 		code_edit.draw.connect(_draw_regions.bind(code_edit))
 
@@ -189,10 +185,8 @@ func _rescan(id:int) -> void:
 	code_edit.queue_redraw()
 
 
-# The file's regions in start order, as {START, END, DEPTH, NAME}. CodeEdit answers only "does this
-# line open/close one", so the nesting is ours to track. END is unread today — nothing draws a span —
-# but resolving it here lets one be added later without walking the buffer again, and DEPTH is what
-# an innermost-wins pass sorts on.
+# Regions in start order as {START, END, DEPTH, NAME}. CodeEdit only marks starts/ends; nesting,
+# END, and DEPTH are tracked here so a later span draw does not need to rescan.
 func _scan(code_edit:CodeEdit) -> Array:
 	var regions:Array = []
 	var open:Array = [] # indices into regions, innermost last
@@ -214,8 +208,7 @@ func _scan(code_edit:CodeEdit) -> Array:
 	return regions
 
 
-# Everything after the start tag on the line. The tag is the bare word ("region"); find() past it
-# works either way, so a tag arriving as "#region" needs no special case.
+# Everything after the start tag. The tag is the bare word, so "#region" needs no special case.
 func _region_name(code_edit:CodeEdit, line:int) -> String:
 	var text = code_edit.get_line(line)
 	var tag = code_edit.get_code_region_start_tag()
@@ -229,8 +222,8 @@ func _region_name(code_edit:CodeEdit, line:int) -> String:
 
 #region drawing
 
-# Runs on the CodeEdit's draw signal, after TextEdit drew itself; the CodeEdit is not ours to free,
-# hence the disconnect in _detach_signals(). A caret blink redraws twice a second, hence the cache.
+# Runs after TextEdit's own draw; disconnect in _detach_signals() since the CodeEdit is not ours.
+# Cache matters because caret blinks redraw twice a second.
 func _draw_regions(code_edit:CodeEdit) -> void:
 	if not _enabled:
 		return
@@ -254,9 +247,8 @@ func _draw_regions(code_edit:CodeEdit) -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1, block[Keys.FONT_SIZE], color)
 
 
-# The label blocks, from the cache when nothing that moves them has changed. The key is what the
-# geometry is a function of — the anchor line rather than get_v_scroll(), since the minimap only
-# moves in whole rows and the raw float would miss every frame.
+# Cached label blocks. The key uses the anchor line, not get_v_scroll(): the minimap moves in whole
+# rows, so a raw float would miss every frame.
 func _labels(code_edit:CodeEdit, state:Dictionary, font:Font) -> Array:
 	var geometry = MinimapGeometry.geometry(code_edit)
 	if geometry.is_empty():
@@ -307,28 +299,24 @@ func _build_labels(code_edit:CodeEdit, state:Dictionary, geometry:Dictionary, fo
 		var text:String = layout[Keys.TEXT]
 		var font_size:int = layout[Keys.FONT_SIZE]
 
-		# measure THIS string — the one that gets drawn, already ellipsized; the raw name would size the
-		# rect for text that is not there
+		# measure the drawn string, already ellipsized — the raw name would size a rect for missing text.
 		var ascent = font.get_ascent(font_size)
 		var text_w = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		var block_h = font.get_height(font_size) + 2 * pad_v_scaled
 
-		# the block straddles its line rather than hanging under it: anchoring the top puts the label's
-		# centre half a block below the tag it marks
+		# straddle the line so the label's centre sits half a block below the tag it marks
 		var top = MinimapGeometry.line_y(code_edit, geometry, region[Keys.START]) - block_h * 0.5
-		# the block is off the top of the minimap, or would hang past the drawn content
+		# off the top of the minimap or past the drawn content
 		if top < 0.0 or top + block_h > bottom:
 			continue
-		# two regions a few lines apart sit a couple of px apart on the minimap — the second would
-		# print straight through the first, so it is dropped rather than smeared
+		# close regions would overlap on the minimap — drop the later one instead of smearing
 		if top < last_bottom:
 			continue
 		last_bottom = top + block_h
 
-		# the baseline sits a pad below the block's top, the ascent down from the text's top; the block's
-		# height is ascent + descent + matching pad, so the text is padded equally and the rect cannot drift
+		# baseline is pad + ascent below the top; block height mirrors that, so padding stays even
 		var text_origin = Vector2(rect_x + pad_h_scaled, top + pad_v_scaled + ascent)
-		# hugs the text rather than running the full width — a short name should not black out the map
+		# hug the text width so a short name does not black out the map
 		var block_rect = Rect2(rect_x, top, minf(text_w + 2 * pad_h_scaled, rect_w), block_h)
 
 		labels.append({
@@ -341,22 +329,20 @@ func _build_labels(code_edit:CodeEdit, state:Dictionary, geometry:Dictionary, fo
 	return labels
 
 
-# How to set a name on the minimap: one line, sized up to fill the width, ellipsized if it cannot fit
-# even at the floor.
+# One line, sized up to fill the width, ellipsized if it cannot fit even at the floor.
 #! keys text:String font_size:int
 func _layout(text:String, font:Font, avail:float) -> Dictionary:
 	var size = _size_to_fit(text, font, avail)
 	if size >= _scaled(LABEL_FONT_SIZE_MIN):
 		return {Keys.TEXT: text, Keys.FONT_SIZE: size}
 
-	# too long for the width at a legible size — shrinking further would only make it unreadable AND
-	# still not fit, so hold the floor and cut the text instead
+	# too long even at the floor: shrinking more would still not fit, so ellipsize at min size
 	size = _scaled(LABEL_FONT_SIZE_MIN)
 	return {Keys.TEXT: _fit(text, font, size, avail), Keys.FONT_SIZE: size}
 
 
-# The largest font size the text still fits at, capped at LABEL_FONT_SIZE_MAX. get_string_size is
-# near-linear in size, so one estimate lands beside the answer and the loop only walks off the rounding.
+# Largest size that still fits, capped at max. get_string_size is near-linear, so the estimate is
+# close and the loops only walk off rounding.
 func _size_to_fit(text:String, font:Font, avail:float) -> int:
 	var max_size = _scaled(LABEL_FONT_SIZE_MAX)
 	var width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, max_size).x
@@ -404,18 +390,18 @@ class Keys:
 	const CODE_EDIT = &"code_edit"
 	## the file's regions, as returned by _scan()
 	const REGIONS = &"regions"
-	## bumped whenever REGIONS is rebuilt, so the draw cache has an int to compare
+	## bumped when REGIONS rebuilds, so the draw cache has an int to compare
 	const VERSION = &"version"
-	## the resolved label blocks, and what they were computed for
+	## resolved label blocks and the key they were computed for
 	const CACHE = &"label_cache"
 	const CACHE_KEY = &"label_cache_key"
 
 	## one label block, as built by _build_labels()
-	## the backing rect, spanning the minimap bar the diff bars' lane
+	## backing rect, spanning the minimap minus the diff bars' lane
 	const RECT = &"rect"
 	## the text's baseline, a pad below the rect's top
 	const ORIGIN = &"origin"
-	## also one entry of _layout(): the name as it will actually be drawn, ellipsized if it had to be
+	## also one entry of _layout(): the name as drawn, ellipsized if needed
 	const TEXT = &"text"
 	const FONT_SIZE = &"font_size"
 

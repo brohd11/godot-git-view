@@ -2,9 +2,8 @@ extends Node
 
 ## Marks the script editor's gutter with what has changed since the last commit.
 ##
-## Diffs HEAD against the editor's buffer, not the file on disk: the baseline is `git show
-## HEAD:<path>`, the diff GitDiff. Hunks are kept per editor so the diff preview reads them
-## rather than diffing the same buffer twice.
+## Diffs HEAD against the editor's buffer, not the file on disk. The baseline is `git show
+## HEAD:<path>`; hunks are cached per editor so the diff preview reuses them.
 
 const UtilsLocal = preload("res://addons/git_view/src/util/utils_local.gd")
 const UtilsRemote = preload("res://addons/git_view/src/util/utils_remote.gd")
@@ -28,15 +27,13 @@ const GUTTER_BEFORE = &"fold_gutter"
 const GUTTER_WIDTH = 7
 const BAR_WIDTH = 3
 
-## unscaled px of the stub marking a deletion, which owns no line and so sits on the boundary between
-## the two that closed over it. A rect, not a triangle: a rect clips by intersecting in one call and
+## unscaled px of the stub marking a deletion. A rect, not a triangle: a rect clips by intersecting in one call and
 ## still shows the part that fits, where a triangle half off the top would have to vanish instead.
 const TICK_WIDTH = 4
 const TICK_HEIGHT = 2
 
-## unscaled px of the mark down the minimap's left edge. A bar and not a band across the whole
-## minimap, which would cover the code the minimap is there to show. Shared, because the other
-## minimap overlays inset by it to leave this lane alone.
+## unscaled px of the mark down the minimap's left edge. A bar, not a band — a band would cover the code the
+## minimap is there to show. Shared, because other overlays inset by it to leave this lane alone.
 const MINIMAP_BAR_WIDTH = MinimapGeometry.BAR_LANE
 
 ## The Changes list's palette, not the editor theme's success/warning/error. UtilsRemote.EditorColors if want to change
@@ -44,9 +41,8 @@ const COLOR_ADDED = GitUtil.Colors.L_GREEN
 const COLOR_MODIFIED = GitUtil.Colors.L_YELLOW
 const COLOR_DELETED = GitUtil.Colors.RED
 
-## What to draw for a file with no baseline to diff against. FULL is the ordinary treatment — the
-## baseline is empty, so every line reads as added; DIM is one muted bar down the whole file; OFF
-## takes the gutter away entirely.
+## What to draw for a file with no baseline to diff against. FULL is ordinary — the baseline is empty, so every
+## line reads as added; DIM is one muted bar down the whole file; OFF removes the gutter entirely.
 enum Mode {
 	OFF,
 	DIM,
@@ -63,8 +59,7 @@ var _untracked_mode:int = Mode.DIM
 var _untracked_dim_color:Color
 
 const WASH_ALPHA = 0.5
-## Gray for what git will never track, green for what it has simply not seen yet — derived from
-## COLOR_ADDED so it stays the muted version of the bar the same file gets at FULL.
+## Gray for ignored files, green for untracked — derived from COLOR_ADDED so it stays the muted version of the FULL bar.
 const COLOR_WASH_IGNORED = GitUtil.Colors.DIM
 const COLOR_WASH_UNTRACKED = Color(COLOR_ADDED, WASH_ALPHA)
 
@@ -138,10 +133,9 @@ func head_moved(repo_dir:String, oid:String) -> void:
 	_refresh_all()
 
 
-## Call after changing _show_ignored or _untracked_mode. A settings change touches neither the text
-## nor a baseline, so nothing would bump VERSION and the minimap cache would keep serving old rects.
-##
-## The baselines survive on purpose: no setting can make a `git show` result stale.
+## Call after changing _show_ignored or _untracked_mode. A settings change touches neither the text nor a
+## baseline, so nothing would bump VERSION and the minimap cache would keep serving old rects. Baselines
+## survive on purpose: no setting can make a `git show` result stale.
 func apply_settings() -> void:
 	_set_untracked_color()
 	for id in _editors:
@@ -210,9 +204,8 @@ func _attach(code_edit:CodeEdit, path:String) -> void:
 		_detach(code_edit)
 		return
 
-	# a file already known to be drawn as nothing gets no gutter added and removed again on every
-	# visit to its tab, which would shift the text sideways each time. A first open still flickers:
-	# the answer is not known until the baseline thread returns.
+	# a file already drawn as OFF gets no gutter added and removed on every tab visit, which would shift the
+	# text sideways. A first open still flickers: the answer is not known until the baseline thread returns.
 	var known:Dictionary = _baselines.get(path, {})
 	if not known.is_empty() and _mode_for(known[Keys.HEAD]) == Mode.OFF:
 		_detach(code_edit)
@@ -344,8 +337,9 @@ func _on_gutter_clicked(line:int, gutter_idx:int, code_edit:CodeEdit):
 	if hunk.is_empty():
 		return # a wash / clean / context-only line — nothing to preview
 	
-	_diff_preview_panel.queue_free()
-	_diff_preview_panel = null
+	if is_instance_valid(_diff_preview_panel):
+		_diff_preview_panel.queue_free()
+		_diff_preview_panel = null
 	
 	if not is_instance_valid(_diff_preview_panel):
 		_diff_preview_panel = DiffPreviewPanel.new()
@@ -524,9 +518,8 @@ func _refresh_all() -> void:
 		_recompute(id)
 
 
-# The hunk drawn over a given new-text line, or {} if the line carries no change. New-side spans
-# mirror hunks_to_markers(): NEW_START is 1-based unless NEW_COUNT is 0, where it already names the
-# 0-based line the removal sits in front of. Hunks never overlap, so first match wins.
+# The hunk drawn over a given new-text line, or {} if the line carries no change. New-side spans mirror
+# hunks_to_markers(): NEW_START is 1-based unless NEW_COUNT is 0, where it names the 0-based line the removal sits in front of.
 func _hunk_for_line(state:Dictionary, line:int, line_count:int) -> Dictionary:
 	for hunk:Dictionary in state[Keys.HUNKS]:
 		var new_count:int = hunk[GitUtil.Keys.NEW_COUNT]
@@ -676,11 +669,11 @@ class Keys:
 	const HUNKS = &"hunks"
 	## bumped whenever MARKERS is rebuilt, so the minimap cache has an int to compare
 	const VERSION = &"version"
-	## whether MARKERS is a whole file wash rather than a diff — the one case with markers but no
-	## hunks, which the minimap's early out would otherwise read as "nothing to draw"
+	## whether MARKERS is a whole-file wash rather than a diff — the one case with markers but no hunks,
+	## which the minimap's early-out would otherwise read as "nothing to draw"
 	const NO_BASELINE = &"no_baseline"
-	## the wash's Color, resolved once where the settings are read so the per-frame draws need no
-	## notion of why a file has no baseline. Only meaningful while NO_BASELINE is true.
+	## the wash's Color, resolved once where settings are read so per-frame draws need no notion of
+	## why a file has no baseline. Only meaningful while NO_BASELINE is true.
 	const WASH_COLOR = &"wash_color"
 	## the minimap marks as [Rect2, Color], and what they were computed for
 	const CACHE = &"minimap_cache"

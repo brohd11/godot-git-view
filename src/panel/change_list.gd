@@ -16,11 +16,10 @@ var icon_overlay:GitDataDraw.GitItemHelper
 
 var right_click_handler:RightClickHandler
 
-# the FILES dict the rows were built from, and the one a command's pathspecs resolve against. Not
-# GitService.get_file_status(): that answers from the repo owning the path, which a nested clone
-# makes a different repo from the one `git -C` will run in.
+# Source-of-truth status dict for the rows, not GitService.get_file_status(): nested clones make
+# the repo owning the path differ from the one `git -C` runs in.
 var _files:Dictionary = {}
-# the repo those keys are relative to — what turns a row back into something to show the user
+# repo the displayed paths are relative to
 var _repo_dir:String = ""
 
 signal changes_command(command:GitUtil.Command, paths:Array)
@@ -76,8 +75,8 @@ func _on_item_right_clicked():
 	right_click_handler.display_popup(options)
 
 
-# One entry per command with something to do to the selection: each is handed only the subset it
-# accepts (staging a mixed selection stages what it can), and one no file accepts is not offered.
+# Add one option per command that applies to at least one selected file; a mixed selection only
+# stages what the command accepts.
 func _add_command_options(options:Options, selected_paths:Array) -> void:
 	var separated = false
 	if not options.is_empty():
@@ -92,7 +91,7 @@ func _add_command_options(options:Options, selected_paths:Array) -> void:
 		if paths.is_empty():
 			continue
 
-		# the destructive pair is unrecoverable and one click away, so keep it apart from the rest
+		# keep destructive commands separated — they are one click and unrecoverable
 		if entry[GitUtil.Keys.CMD_DESTRUCTIVE] and not separated:
 			options.add_separator("Destructive")
 			separated = true
@@ -101,8 +100,7 @@ func _add_command_options(options:Options, selected_paths:Array) -> void:
 			_changes_command.bind(command, paths))
 
 
-# Says so when a command will act on fewer files than are selected — otherwise "Unstage" over five
-# rows of which two are staged gives no hint the other three are left alone.
+# Hint when a command skips some selected files, so "Unstage" on a mixed selection does not lie.
 func _command_label(entry:Dictionary, paths:Array, selected_paths:Array) -> String:
 	var label:String = entry[GitUtil.Keys.CMD_LABEL]
 	if paths.size() == selected_paths.size():
@@ -117,8 +115,7 @@ func _changes_command(command:GitUtil.Command, paths:Array):
 	changes_command.emit(command, paths)
 
 
-# Discarding a file git reports as deleted *restores* it, so the destructive framing is wrong there —
-# and a bare file name is not enough to recognise the file by, since two dirs can hold the same one.
+# Discard on a deleted file actually restores it, and bare file names are ambiguous across dirs.
 func _confirm_text(command:GitUtil.Command, paths:Array) -> String:
 	var label:String = GitUtil.COMMANDS[command][GitUtil.Keys.CMD_LABEL]
 

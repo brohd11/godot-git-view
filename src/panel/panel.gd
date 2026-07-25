@@ -2,10 +2,8 @@ extends VBoxContainer
 
 ## The sidebar's Git section — a view over GitService.
 ##
-## Holds no git state of its own: it renders GitService's status/commits/repos and pushes user
-## actions (repo select, stage/discard) back to it. GitService runs the git calls off the main thread
-## and publishes `status_updated` / `commits_updated` / `repos_updated`, which drive the branch info,
-## the Changes list and the Commits list.
+## Owns no git state; renders what GitService publishes and pushes user actions back to it.
+## GitService runs git off the main thread and emits `status_updated` / `commits_updated` / `repos_updated`.
 
 const UtilsRemote = preload("res://addons/git_view/src/util/utils_remote.gd")
 const UControl = UtilsRemote.UControl
@@ -35,7 +33,7 @@ var tab_container:TabBarContainer
 var change_list:ChangeList
 var commit_list:CommitList
 
-# the shared data provider — bound in _ready, the source of every value rendered here
+# bound in _ready; every rendered value comes from here
 var _git:GitService
 
 var _dock_data:Dictionary
@@ -89,7 +87,7 @@ func _ready() -> void:
 	branch_texture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	branch_hbox.add_child(branch_texture)
 
-	# the branch name gives way: ellipsis trims the end of a string, so a combined label would eat the divergence — the half worth acting on
+	# keep labels separate: ellipsis trims the branch name, so a combined label would hide the divergence
 	branch_label = Label.new()
 	#branch_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	#branch_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -116,13 +114,12 @@ func _ready() -> void:
 	tab_container.add_tab(commit_list)
 	UtilsLocal.set_item_list_sb(commit_list)
 
-	# the change list looks its status texture up at draw time, so a bake landing later only needs a
-	# repaint — the rows themselves are already right
+	# rows fetch status textures at draw time, so a late icon bake only needs a redraw
 	var glyph_icons = GitService.get_glyph_icons_node()
 	if is_instance_valid(glyph_icons):
 		glyph_icons.generated.connect(change_list.queue_redraw)
 
-	# GitService is registered by ScriptDock before the sidebar is built, so it is ready here
+	# GitService is already registered by ScriptDock when this panel is built
 	_bind_service()
 
 	if not _initialized:
@@ -132,14 +129,14 @@ func _ready() -> void:
 func _bind_service() -> void:
 	_git = GitService.get_instance()
 	if not is_instance_valid(_git):
-		# nothing to render against; a later status/repos change would emit into a dead panel anyway
+		# no service to render against; later signals would hit a dead panel
 		return
 
 	_git.status_updated.connect(_on_status_updated)
 	_git.commits_updated.connect(_on_commits_updated)
 	_git.repos_updated.connect(_on_repos_updated)
 
-	# the service may have scanned before this panel existed — render whatever it already holds
+	# render any status/commits/repos the service already scanned
 	_on_repos_updated()
 	if not _git.status.is_empty():
 		_on_status_updated(_git.current_repo)
@@ -152,9 +149,9 @@ func _apply_dock_data() -> void:
 	var saved_repo:String = _dock_data.get(Keys.CURRENT_REPO, MAIN_REPO)
 	_dock_data = {}
 
-	# restore the selected repo through the service; set_repo no-ops if it is already current
+	# restore the saved repo through the service; set_repo no-ops if unchanged
 	if is_instance_valid(_git) and saved_repo != _git.current_repo and saved_repo in _git.repos:
-		_clear_lists() # don't leave the default repo's rows up while the restored repo's calls run
+		_clear_lists() # clear the default repo's rows while the restored repo's calls run
 		_git.set_repo(saved_repo)
 
 	_initialized = true
@@ -163,7 +160,7 @@ func _apply_dock_data() -> void:
 func clean_up() -> void:
 	if not is_instance_valid(_git):
 		return
-	# the service outlives this panel, so drop these connections rather than let it emit into a freed node
+	# the service outlives this panel; disconnect so it can't emit into a freed node
 	if _git.status_updated.is_connected(_on_status_updated):
 		_git.status_updated.disconnect(_on_status_updated)
 	if _git.commits_updated.is_connected(_on_commits_updated):
@@ -187,18 +184,16 @@ func _on_repo_popup_pressed():
 func _select_repo(repo_dir:String):
 	if _git.current_repo == repo_dir:
 		return
-	# don't leave the old repo's rows up while the new repo's git calls run — the branch least of all
+	# clear old rows while the new repo's git calls run; the branch label is the worst to keep
 	_clear_lists()
 	_git.set_repo(repo_dir)
 
 func _get_repo_name(repo_dir:String):
 	return MAIN_REPO_TITLE if repo_dir == MAIN_REPO else repo_dir.trim_suffix("/").get_file()
 
-# Don't leave one repo's rows up while another's data is in flight — the old branch under the new
-# repo's name is a worse lie than showing nothing.
+# Clear old rows while another repo's data is in flight — showing the old branch under the new repo's name is worse than empty.
 func _clear_lists() -> void:
-	# through set_files, not clear(): the rows and the status dict behind them go together, and a
-	# menu built off a dict the rows no longer match is the one thing this must never do
+	# use set_files so the rows and their status dict stay matched; a menu built from a stale dict is dangerous
 	change_list.set_files([])
 	commit_list.clear_commits()
 
@@ -212,8 +207,7 @@ func _on_status_updated(_repo_dir:String) -> void:
 	_update_repo_info()
 
 
-# Spawns nothing: reads the status and log GitService already fetched — it assigns both members
-# before emitting either signal, so `commits` here is not a frame behind.
+# reads status/log GitService already fetched; both members are assigned before either signal emits
 func _update_repo_info() -> void:
 	var info = GitUtil.get_repo_info(_git.status, _git.commits)
 	var branch:Dictionary = info[GitUtil.Keys.BRANCH]
@@ -228,7 +222,7 @@ func _update_repo_info() -> void:
 	divergence_label.text = divergence
 	divergence_label.visible = not divergence.is_empty()
 
-	# behind means there is something to pull, which is the one that wants noticing
+	# "behind" means there is something to pull, so it gets the attention color
 	if not divergence.is_empty():
 		divergence_label.add_theme_color_override(&"font_color",
 			GitUtil.Colors.L_YELLOW if branch[GitUtil.Keys.BRANCH_BEHIND] > 0
@@ -248,14 +242,13 @@ func _rebuild_change_list() -> void:
 	var files:Dictionary = _git.status.get(GitUtil.Keys.FILES, {})
 	var paths = files.keys()
 	paths.sort()
-	# the dict travels with the rows: it is what decides which commands a selection is offered, and
-	# it has to be the same snapshot the command's pathspecs are built from
+	# the status dict must match the rows: command offerings and pathspecs are built from this snapshot
 	change_list.set_files(paths, files, _git.current_repo)
 
 
 func _rebuild_commit_list() -> void:
 	commit_list.clear_commits()
-	# git already returned these newest first — do not sort
+	# git returned these newest first; don't re-sort
 	for commit in _git.commits:
 		commit_list.add_commit(commit)
 

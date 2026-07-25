@@ -1,9 +1,6 @@
 @tool
 extends EditorPlugin
 
-## Owns the script-editor diff gutter, driven by the shared GitService (registered as a consumer).
-## The main-screen scaffolding below is a stub for the eventual full-screen git view.
-
 const DiffGutter = preload("res://addons/git_view/src/diff_gutter/git_diff_gutter.gd")
 const RegionMinimap = preload("res://addons/git_view/src/minimap/code_region_minimap.gd")
 const GitPanel = preload("res://addons/git_view/src/panel/panel.gd")
@@ -40,10 +37,10 @@ func _enter_tree() -> void:
 	add_child(diff_gutter)
 	gs.repos_updated.connect(_on_git_repos_updated)
 	gs.status_updated.connect(_on_git_status_updated)
-	# repos_updated already fired during registration, above — sync the current list in
+	# repos_updated already fired in GitService ready, sync in set_repos
 	diff_gutter.set_repos(gs.repos)
 
-	# no GitService signals: the region labels are a navigation aid on any open script, git or not
+	# doesn't use git, but does use the minimap
 	region_minimap = RegionMinimap.new()
 	add_child(region_minimap)
 	
@@ -51,24 +48,28 @@ func _enter_tree() -> void:
 	
 	git_panel = GitPanel.new()
 	
-	if ScriptDock.instance_valid(): # this could be a nameless check
-		ScriptDock.call_on_ready(ScriptDock.add_section.bind(GIT_SECTION, git_panel))
+	var script_dock = Singletons.CheckInstance.get_instance("ScriptDock")
+	if is_instance_valid(script_dock): # if ScriptDock is available: add. Not a hard dep
+		script_dock.call_on_ready(script_dock.add_section.bind(GIT_SECTION, git_panel))
 
 
 func _exit_tree() -> void:
-	ScriptDock.remove_section(GIT_SECTION)
-	git_panel.queue_free()
-	# the gutter added gutters into CodeEdits that outlive us — tear those out before we free
+	var script_dock = Singletons.CheckInstance.get_instance("ScriptDock")
+	if is_instance_valid(script_dock):
+		var gp_section = script_dock.get_instance().sidebar_container.get_section(GIT_SECTION)
+		if is_instance_valid(gp_section):
+			script_dock.remove_section(GIT_SECTION)
+			git_panel.queue_free()
+	
 	if is_instance_valid(diff_gutter):
 		diff_gutter.clean_up()
-	# same for the region labels' draw connections
 	if is_instance_valid(region_minimap):
 		region_minimap.clean_up()
+	
 	GitService.unregister_node(self)
 
 
-# A commit is a new baseline for every script open under that repo; the gutter flushes and re-reads
-# baselines when HEAD moves.
+# commits move HEAD, so flush and re-read every open script's baseline in that repo.
 func _on_git_status_updated(repo_dir:String) -> void:
 	if is_instance_valid(diff_gutter):
 		# for repo_dir, not the panel's current repo — status_updated fires for every repo and
