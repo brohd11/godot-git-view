@@ -29,10 +29,10 @@ const GUTTER_BEFORE = &"fold_gutter"
 const GUTTER_WIDTH = 7
 const BAR_WIDTH = 3
 
-## unscaled px of the stub marking a deletion. A rect, not a triangle: a rect clips by intersecting in one call and
-## still shows the part that fits, where a triangle half off the top would have to vanish instead.
+## unscaled px of the stub marking a deletion. A rect, not a triangle: a rect clips by intersecting, simpler
 const TICK_WIDTH = 4
-const TICK_HEIGHT = 2
+const TICK_HEIGHT = 6
+const TICK_HEIGHT_MINIMAP = 2
 
 ## unscaled px of the mark down the minimap's left edge. A bar, not a band — a band would cover the code the
 ## minimap is there to show. Shared, because other overlays inset by it to leave this lane alone.
@@ -107,8 +107,9 @@ func _ready() -> void:
 	
 	setting_helper.settings_changed.connect(apply_settings, 1)
 	_set_untracked_color()
-	# initialize
-	_attach_current_code_edit()
+	# initializ
+	await get_tree().process_frame
+	Singletons.CheckInstance.call_on_ready("ScriptTabSingleton", _attach_current_code_edit)
 
 
 #region lifecycle
@@ -451,7 +452,7 @@ func _build_minimap_rects(code_edit:CodeEdit, state:Dictionary, geometry:Diction
 	var x = MinimapGeometry.left_x(code_edit)
 
 	var bar_width = MINIMAP_BAR_WIDTH * scale
-	var tick_height = TICK_HEIGHT * scale
+	var tick_height = TICK_HEIGHT_MINIMAP * scale
 
 	# stop at the drawn content, not code_edit.size: a short file's minimap ends well above the bottom,
 	# and a long one is inset by the bottom margin — either way a run past it should clip, not fill down

@@ -233,7 +233,8 @@ func _layout() -> void:
 
 	var line_h = _target_code_edit.get_line_height()
 	var y0 = _target_code_edit.get_pos_at_line_column(current_line, 0).y
-	var top = (y0 + line_h) if _anchor_below else (y0 - line_h - _panel_height)
+	# top used to be y0 + line_h, seems to be an extra space though
+	var top = y0 if _anchor_below else (y0 - line_h - _panel_height)
 	
 	if is_floored:
 		top = _target_code_edit.size.y - _panel_height
