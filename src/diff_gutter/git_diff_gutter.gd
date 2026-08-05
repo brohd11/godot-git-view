@@ -107,7 +107,7 @@ func _ready() -> void:
 	
 	setting_helper.settings_changed.connect(apply_settings, 1)
 	_set_untracked_color()
-	# initializ
+	# initialize
 	await get_tree().process_frame
 	Singletons.CheckInstance.call_on_ready("ScriptTabSingleton", _attach_current_code_edit)
 
@@ -116,6 +116,10 @@ func _ready() -> void:
 
 ## Project repos, set by git panel on refresh
 func set_repos(repos:Array[String]) -> void:
+	# this arrives on every refresh now, and re-reading every baseline once a second is the cost of
+	# not checking
+	if _repos == repos:
+		return
 	_repos = repos.duplicate()
 	# which repo owns a path may have just changed, and with it every baseline read from one
 	_baselines.clear()
@@ -133,7 +137,10 @@ func head_moved(repo_dir:String, oid:String) -> void:
 		if _baselines[path][Keys.REPO] == repo_dir:
 			_baselines.erase(path)
 
-	_refresh_all()
+	# erasing is not enough: _recompute reads an empty baseline as "still in flight" and holds the old
+	# marks, and _attach is the only thing that ever starts a read. Background tabs pick theirs up on
+	# the next tab change as they already do — _request_baseline holds one pending slot.
+	_attach_current_code_edit()
 
 
 ## Call after changing _show_ignored or _untracked_mode. A settings change touches neither the text nor a
@@ -448,7 +455,7 @@ func _build_minimap_rects(code_edit:CodeEdit, state:Dictionary, geometry:Diction
 	var h:int = geometry[GeoKeys.H]
 	var height = code_edit.size.y
 	var scale = EditorInterface.get_editor_scale()
-
+	
 	var x = MinimapGeometry.left_x(code_edit)
 
 	var bar_width = MINIMAP_BAR_WIDTH * scale

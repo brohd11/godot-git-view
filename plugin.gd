@@ -35,9 +35,9 @@ func _enter_tree() -> void:
 
 	diff_gutter = DiffGutter.new()
 	add_child(diff_gutter)
-	gs.repos_updated.connect(_on_git_repos_updated)
+	gs.refresh_finished.connect(_on_git_refresh_finished)
 	gs.status_updated.connect(_on_git_status_updated)
-	# repos_updated already fired in GitService ready, sync in set_repos
+	# the first drain is a debounce away; sync now so the gutter is not blank until then
 	diff_gutter.set_repos(gs.repos)
 
 	# doesn't use git, but does use the minimap
@@ -77,6 +77,8 @@ func _on_git_status_updated(repo_dir:String) -> void:
 		diff_gutter.head_moved(repo_dir, GitService.get_instance().get_branch_oid_for(repo_dir))
 
 
-func _on_git_repos_updated() -> void:
+# set_repos no-ops unless the set actually moved, so this is free on the refreshes that did not add
+# or drop a repo
+func _on_git_refresh_finished() -> void:
 	if is_instance_valid(diff_gutter):
 		diff_gutter.set_repos(GitService.get_instance().repos)

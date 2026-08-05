@@ -8,7 +8,7 @@ options:
   include_import: true
   ignore_src: true
   use_tag_in_cfg: true
-  remove_cfg_deps: true
+  exported_deps: []
   include_min_version: true
   move_global_files: true
   parser_settings:

@@ -3,7 +3,7 @@ extends VBoxContainer
 ## The sidebar's Git section — a view over GitService.
 ##
 ## Owns no git state; renders what GitService publishes and pushes user actions back to it.
-## GitService runs git off the main thread and emits `status_updated` / `commits_updated` / `repos_updated`.
+## GitService runs git off the main thread and emits `status_updated` / `commits_updated` / `refresh_finished`.
 
 const UtilsRemote = preload("res://addons/git_view/src/util/utils_remote.gd")
 const UControl = UtilsRemote.UControl
@@ -134,10 +134,9 @@ func _bind_service() -> void:
 
 	_git.status_updated.connect(_on_status_updated)
 	_git.commits_updated.connect(_on_commits_updated)
-	_git.repos_updated.connect(_on_repos_updated)
 
-	# render any status/commits/repos the service already scanned
-	_on_repos_updated()
+	# render any status/commits the service already scanned. The repo list needs nothing: the popup is
+	# built on demand from _git.repos
 	if not _git.status.is_empty():
 		_on_status_updated(_git.current_repo)
 	if not _git.commits.is_empty():
@@ -165,13 +164,6 @@ func clean_up() -> void:
 		_git.status_updated.disconnect(_on_status_updated)
 	if _git.commits_updated.is_connected(_on_commits_updated):
 		_git.commits_updated.disconnect(_on_commits_updated)
-	
-	#if _git.repos_updated.is_connected(_on_repos_updated):
-		#_git.repos_updated.disconnect(_on_repos_updated)
-
-
-func _on_repos_updated() -> void:
-	return
 
 
 func _on_repo_popup_pressed():
