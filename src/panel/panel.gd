@@ -10,6 +10,7 @@ const UControl = UtilsRemote.UControl
 const TabBarContainer = UtilsRemote.TabBarContainer
 const RightClickHandler = UtilsRemote.RightClickHandler
 const Options = UtilsRemote.Options
+const UOs = ALibRuntime.Utils.UOs
 
 const UtilsLocal = preload("res://addons/git_view/src/util/utils_local.gd")
 
@@ -168,8 +169,13 @@ func clean_up() -> void:
 
 func _on_repo_popup_pressed():
 	var options = Options.new()
+	options.add_option("Terminal", UOs.launch_term.bind("", _git.current_repo), ["Terminal"])
+	var marker_icon = GitService.GitDataDraw.Util.get_marker_icon()
 	for repo in _git.repos:
-		options.add_option("Repo/" + _get_repo_name(repo), _select_repo.bind(repo))
+		var status = _git.get_repo_status(repo)
+		var color = Color.WHITE if status.files.is_empty() else _git.colors.modified
+		options.add_option("Repo/" + _get_repo_name(repo), _select_repo.bind(repo), ["TexturePreviewChannels", marker_icon])
+		options.add_option_data("Repo/" + _get_repo_name(repo), [null, color])
 	
 	right_click_handler.display_on_control(options, repo_popup_button, Vector2(0, repo_popup_button.size.y))
 
