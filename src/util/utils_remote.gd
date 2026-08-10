@@ -1,5 +1,7 @@
 #! remote
 
+## exported references needed by git view.
+
 const GitUtil = GitService.GitUtil
 const GitDiff = GitService.GitDiff
 

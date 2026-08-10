@@ -1,5 +1,7 @@
 extends ItemList
 
+## lists changed paths and offers valid git actions.
+
 const GitUtil = GitService.GitUtil
 const GitDataDraw = GitService.GitDataDraw
 
@@ -16,10 +18,7 @@ var icon_overlay:GitDataDraw.GitItemHelper
 
 var right_click_handler:RightClickHandler
 
-# Source-of-truth status dict for the rows, not GitService.get_file_status(): nested clones make
-# the repo owning the path differ from the one `git -C` runs in.
 var _files:Dictionary = {}
-# repo the displayed paths are relative to
 var _repo_dir:String = ""
 
 signal changes_command(command:GitUtil.Command, paths:Array)
@@ -48,7 +47,6 @@ func set_files(file_paths:Array, files:Dictionary={}, repo_dir:String=""):
 		set_item_metadata(idx, p)
 		set_item_tooltip(idx, p)
 		
-		#icon_overlay.set_item_fg_color(idx, p)
 		
 
 func _on_item_activated(idx:int):
@@ -75,8 +73,6 @@ func _on_item_right_clicked():
 	right_click_handler.display_popup(options)
 
 
-# Add one option per command that applies to at least one selected file; a mixed selection only
-# stages what the command accepts.
 func _add_command_options(options:Options, selected_paths:Array) -> void:
 	var separated = false
 	if not options.is_empty():
@@ -91,7 +87,6 @@ func _add_command_options(options:Options, selected_paths:Array) -> void:
 		if paths.is_empty():
 			continue
 
-		# keep destructive commands separated — they are one click and unrecoverable
 		if entry[GitUtil.Keys.CMD_DESTRUCTIVE] and not separated:
 			options.add_separator("Destructive")
 			separated = true
@@ -100,7 +95,6 @@ func _add_command_options(options:Options, selected_paths:Array) -> void:
 			_changes_command.bind(command, paths))
 
 
-# Hint when a command skips some selected files, so "Unstage" on a mixed selection does not lie.
 func _command_label(entry:Dictionary, paths:Array, selected_paths:Array) -> String:
 	var label:String = entry[GitUtil.Keys.CMD_LABEL]
 	if paths.size() == selected_paths.size():
@@ -115,7 +109,6 @@ func _changes_command(command:GitUtil.Command, paths:Array):
 	changes_command.emit(command, paths)
 
 
-# Discard on a deleted file actually restores it, and bare file names are ambiguous across dirs.
 func _confirm_text(command:GitUtil.Command, paths:Array) -> String:
 	var label:String = GitUtil.COMMANDS[command][GitUtil.Keys.CMD_LABEL]
 

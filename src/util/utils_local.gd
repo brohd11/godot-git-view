@@ -1,6 +1,5 @@
+## local helpers and settings for git view controls.
 
-## A visible v-scrollbar already eats into the row width, so the panel's lists drop their right
-## content margin while it is up and take it back when it goes.
 static func set_item_list_sb(item_list:ItemList) -> void:
 	var sb:StyleBoxFlat = item_list.get_theme_stylebox(&"panel").duplicate()
 	sb.content_margin_right = 0
@@ -17,5 +16,4 @@ class EditorSet:
 	const GUTTER_UNTRACKED = &"plugin/git_view/gutter/untracked_render"
 	const GUTTER_IGNORE = &"plugin/git_view/gutter/ignored"
 	const MINIMAP_REGIONS = &"plugin/git_view/minimap/code_regions"
-	## the one setting here that costs a git spawn when on — one `git blame` per file per commit
 	const BLAME_CARET_LINE = &"plugin/git_view/blame/caret_line"

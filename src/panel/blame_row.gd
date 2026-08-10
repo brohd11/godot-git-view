@@ -1,20 +1,14 @@
 extends HBoxContainer
 
-## The Git section's caret line row: which commit last touched the line the caret is on.
-##
-## Reads: <mono hash>  <author> · <relative date>
-##        <subject>
-##
-## Purely a view over what BlameTracker emits — it owns no state and asks git nothing.
+## renders the commit behind the active caret line.
+
 
 const UtilsRemote = preload("res://addons/git_view/src/util/utils_remote.gd")
 const GitUtil = UtilsRemote.GitUtil
 
 const BlameTracker = preload("res://addons/git_view/src/blame/blame_tracker.gd")
 
-## The hash is dimmed the same amount the commit list dims its own, so the two read as one thing
 const DIM_ALPHA = 0.5
-## unscaled px between the hash and the rest
 const GAP = 6
 
 var hash_label:Label
@@ -38,33 +32,31 @@ func _ready() -> void:
 	add_child(meta_label)
 
 	subject_label = Label.new()
-	# the first thing to give up room: the hash and date are fixed width facts, a subject is not
 	subject_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	subject_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	subject_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(subject_label)
+	
+	set_blame({})
 
-	hide() # nothing to say until a caret lands somewhere with history
 
-
-## The BlameTracker payload, or {} for a line nothing can be said about.
 func set_blame(info:Dictionary) -> void:
+	
+	var dim = get_theme_color(&"font_color", &"Label")
+	dim.a = DIM_ALPHA
+	
 	if info.is_empty():
-		hide()
+		meta_label.text = "no blame data"
+		meta_label.add_theme_color_override(&"font_color", dim)
 		return
-
-	show()
-
+	
 	if info.get(BlameTracker.Keys.UNCOMMITTED, false):
 		_set_uncommitted(info.get(BlameTracker.Keys.LINE, 0))
 		return
-
-	var dim = get_theme_color(&"font_color", &"Label")
-	dim.a = DIM_ALPHA
-
+	
 	hash_label.text = info.get(GitUtil.Keys.HASH, "")
 	hash_label.add_theme_color_override(&"font_color", dim)
-
+	
 	meta_label.text = "%s · %s" % [
 		info.get(GitUtil.Keys.AUTHOR, ""),
 		info.get(GitUtil.Keys.DATE, ""),
@@ -75,8 +67,6 @@ func set_blame(info:Dictionary) -> void:
 	tooltip_text = _tooltip(info)
 
 
-# A line typed since the commit: there is no commit to name, and saying so is more use than an empty
-# row the eye reads as "still loading".
 func _set_uncommitted(line:int) -> void:
 	hash_label.text = ""
 	meta_label.text = "uncommitted"
@@ -85,8 +75,6 @@ func _set_uncommitted(line:int) -> void:
 	tooltip_text = "Line %d has no committed version" % (line + 1)
 
 
-# The absolute date belongs here rather than in the row: the row answers "how long ago", which is
-# what a glance wants, and the exact moment is what a second look is for.
 func _tooltip(info:Dictionary) -> String:
 	var stamp:int = info.get(GitUtil.Keys.AUTHOR_TIME, 0)
 	var when = Time.get_datetime_string_from_unix_time(stamp, true) if stamp > 0 else ""

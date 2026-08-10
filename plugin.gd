@@ -1,6 +1,8 @@
 @tool
 extends EditorPlugin
 
+## editor entry point for the git panel, gutter, minimap, and blame row.
+
 const DiffGutter = preload("res://addons/git_view/src/diff_gutter/git_diff_gutter.gd")
 const RegionMinimap = preload("res://addons/git_view/src/minimap/code_region_minimap.gd")
 const GitPanel = preload("res://addons/git_view/src/panel/panel.gd")
@@ -39,10 +41,8 @@ func _enter_tree() -> void:
 	add_child(diff_gutter)
 	gs.refresh_finished.connect(_on_git_refresh_finished)
 	gs.status_updated.connect(_on_git_status_updated)
-	# the first drain is a debounce away; sync now so the gutter is not blank until then
 	diff_gutter.set_repos(gs.repos)
 
-	# doesn't use git, but does use the minimap
 	region_minimap = RegionMinimap.new()
 	add_child(region_minimap)
 	
@@ -55,8 +55,6 @@ func _enter_tree() -> void:
 		return
 	script_dock.call_on_ready(script_dock.add_section.bind(GIT_SECTION, git_panel))
 
-	# only with the panel up: the row is the tracker's only consumer, and without it every tab change
-	# would spend a `git blame` on something nothing displays
 	blame_tracker = BlameTracker.new()
 	blame_tracker.gutter = diff_gutter
 	blame_tracker.line_blame.connect(git_panel.set_blame)
@@ -82,20 +80,14 @@ func _exit_tree() -> void:
 	GitService.unregister_node(self)
 
 
-# commits move HEAD, so flush and re-read every open script's baseline in that repo.
 func _on_git_status_updated(repo_dir:String) -> void:
-	# for repo_dir, not the panel's current repo — status_updated fires for every repo and
-	# get_branch_oid() hands back current_repo's oid; a wrong oid stored here silently suppresses a real flush later
 	var oid = GitService.get_instance().get_branch_oid_for(repo_dir)
 	if is_instance_valid(diff_gutter):
 		diff_gutter.head_moved(repo_dir, oid)
-	# the same flush, for the same reason: a commit rewrites who last touched each line
 	if is_instance_valid(blame_tracker):
 		blame_tracker.head_moved(repo_dir, oid)
 
 
-# set_repos no-ops unless the set actually moved, so this is free on the refreshes that did not add
-# or drop a repo
 func _on_git_refresh_finished() -> void:
 	var repos = GitService.get_instance().repos
 	if is_instance_valid(diff_gutter):
