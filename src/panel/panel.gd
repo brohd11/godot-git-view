@@ -17,6 +17,7 @@ const UtilsLocal = preload("res://addons/git_view/src/util/utils_local.gd")
 const GitUtil = UtilsRemote.GitUtil
 const ChangeList = preload("res://addons/git_view/src/panel/change_list.gd")
 const CommitList = preload("res://addons/git_view/src/panel/commit_list.gd")
+const BlameRow = preload("res://addons/git_view/src/panel/blame_row.gd")
 
 const MAIN_REPO = "res://"
 const MAIN_REPO_TITLE = "Project"
@@ -33,6 +34,7 @@ var divergence_label:Label
 var tab_container:TabBarContainer
 var change_list:ChangeList
 var commit_list:CommitList
+var blame_row:BlameRow
 
 # bound in _ready; every rendered value comes from here
 var _git:GitService
@@ -98,6 +100,11 @@ func _ready() -> void:
 
 	divergence_label = Label.new()
 	branch_hbox.add_child(divergence_label)
+
+	# above the tabs, not inside one: it is about the script being edited rather than the repo, so it
+	# should not go away when the Commits tab is up
+	blame_row = BlameRow.new()
+	add_child(blame_row)
 
 	tab_container = TabBarContainer.new()
 	add_child(tab_container)
@@ -253,6 +260,13 @@ func _rebuild_commit_list() -> void:
 
 func _on_changes_command(command:GitUtil.Command, paths:Array):
 	_git.run_command(command, paths)
+
+
+## BlameTracker's caret line payload, or {} to clear the row. Connected by plugin.gd, which owns the
+## tracker — the panel is a view here as everywhere else.
+func set_blame(info:Dictionary) -> void:
+	if is_instance_valid(blame_row):
+		blame_row.set_blame(info)
 
 
 class Keys:

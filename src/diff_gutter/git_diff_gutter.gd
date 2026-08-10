@@ -18,6 +18,10 @@ const GitDiff = UtilsRemote.GitDiff
 
 const DiffPreviewPanel = preload("res://addons/git_view/src/diff_gutter/diff_preview_panel.gd")
 
+## An editor's hunks were rebuilt. What anything reading them through get_hunks() has to wait for:
+## they start empty, and an empty set means "no local changes" only once this has fired.
+signal hunks_changed(code_edit:CodeEdit)
+
 const GUTTER_NAME = &"git_view_git_diff"
 
 ## ScriptTextEditor's connection_gutter is a plain int cached at construction and never revisited —
@@ -583,9 +587,16 @@ func _recompute(id:int) -> void:
 		_editors.erase(id)
 		return
 
+	if _rebuild(state, code_edit):
+		hunks_changed.emit(code_edit)
+
+
+# The work of _recompute, split off so every path that rebuilds the hunks reports it exactly once.
+# False means nothing was rebuilt and the old hunks still stand.
+func _rebuild(state:Dictionary, code_edit:CodeEdit) -> bool:
 	var baseline:Dictionary = _baselines.get(state[Keys.PATH], {})
 	if baseline.is_empty():
-		return # still in flight — leave whatever is drawn rather than blank it and blink
+		return false # still in flight — leave whatever is drawn rather than blank it and blink
 
 	var head:int = baseline[Keys.HEAD]
 
@@ -593,7 +604,7 @@ func _recompute(id:int) -> void:
 	# PATH would otherwise light up every open script
 	if head == GitUtil.Head.ERROR or _mode_for(head) == Mode.OFF:
 		_blank(state, code_edit)
-		return
+		return true
 
 	if _mode_for(head) == Mode.DIM:
 		state[Keys.HUNKS] = []
@@ -603,7 +614,7 @@ func _recompute(id:int) -> void:
 		state[Keys.MARKERS] = GitDiff.fill_markers(code_edit.get_line_count(), GitDiff.Marker.NO_BASELINE)
 		state[Keys.VERSION] += 1
 		code_edit.queue_redraw()
-		return
+		return true
 
 	# Mode.FULL falls through: ABSENT and IGNORED both arrive as an empty baseline, so a file git has
 	# never seen diffs as entirely added, which is what it is
@@ -616,6 +627,16 @@ func _recompute(id:int) -> void:
 	# what the minimap cache watches — an int to compare, rather than the marker array itself
 	state[Keys.VERSION] += 1
 	code_edit.queue_redraw()
+	return true
+
+
+## The buffer-vs-HEAD hunks for an editor, so a caret line can be walked back to the line HEAD has.
+## Empty both for an unmodified buffer and for one whose baseline is still in flight — hunks_changed
+## is what says the difference has been resolved.
+func get_hunks(code_edit:CodeEdit) -> Array:
+	if not is_instance_valid(code_edit):
+		return []
+	return _editors.get(code_edit.get_instance_id(), {}).get(Keys.HUNKS, [])
 
 #endregion
 
