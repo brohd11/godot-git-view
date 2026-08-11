@@ -8,7 +8,7 @@ const UControl = UtilsRemote.UControl
 const TabBarContainer = UtilsRemote.TabBarContainer
 const RightClickHandler = UtilsRemote.RightClickHandler
 const Options = UtilsRemote.Options
-const UOs = ALibRuntime.Utils.UOs
+const UOs = UtilsRemote.UOs
 
 const UtilsLocal = preload("res://addons/git_view/src/util/utils_local.gd")
 

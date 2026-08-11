@@ -17,6 +17,7 @@ options:
     parse_cs:
       namespace_rename: {}
     parse_gd:
+      reduce_access_paths: true
       replace_editor_interface: false
       class_rename_ignore: []
       backport_string_renames: {}

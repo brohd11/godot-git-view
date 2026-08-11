@@ -88,7 +88,10 @@ func _ready() -> void:
 	setting_helper.settings_changed.connect(apply_settings, 1)
 	_set_untracked_color()
 	await get_tree().process_frame
-	Singletons.CheckInstance.call_on_ready("ScriptTabSingleton", _attach_current_code_edit)
+	if Singletons.CheckInstance.check_valid("ScriptTabSingleton"):
+		Singletons.CheckInstance.call_on_ready("ScriptTabSingleton", _attach_current_code_edit)
+	else:
+		ScriptListManager.call_on_ready(_attach_current_code_edit)
 
 
 #region lifecycle

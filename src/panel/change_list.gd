@@ -104,7 +104,7 @@ func _command_label(entry:Dictionary, paths:Array, selected_paths:Array) -> Stri
 
 func _changes_command(command:GitUtil.Command, paths:Array):
 	if command in GitUtil.COMMAND_DESTRUCTIVE:
-		if not await ALibRuntime.Dialog.confirm(_confirm_text(command, paths), self):
+		if not await UtilsRemote.Dialog.confirm(_confirm_text(command, paths), self):
 			return
 	changes_command.emit(command, paths)
 
