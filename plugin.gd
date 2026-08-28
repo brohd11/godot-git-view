@@ -22,11 +22,6 @@ func _get_plugin_name() -> String:
 	return "Git View"
 func _get_plugin_icon() -> Texture2D:
 	return EditorInterface.get_base_control().get_theme_icon("Node", &"EditorIcons")
-func _has_main_screen() -> bool:
-	return true
-
-func _make_visible(visible:bool) -> void:
-	pass
 
 func _enable_plugin() -> void:
 	pass
