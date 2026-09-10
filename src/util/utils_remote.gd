@@ -5,7 +5,7 @@
 const GitUtil = GitService.GitUtil
 const GitDiff = GitService.GitDiff
 
-const Dialog = preload("uid://bccd38qwc47vu") #! resolve ALibRuntime.Dialog
+const Confirm = preload("uid://b4rwv7tgks0b5") #! resolve ALibRuntime.Dialog.Handlers.Confirmation
 
 const NUItemList = preload("uid://cjls86v1v4242") #! resolve ALibRuntime.NodeUtils.NUItemList
 const FSSmallPopup = preload("uid://1gdu201y6jro") #! resolve ALibEditor.FileSystem.Component.SmallPopup

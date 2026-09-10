@@ -9,6 +9,7 @@ const GitDataDraw = GitService.GitDataDraw
 const UtilsRemote = preload("res://addons/git_view/src/util/utils_remote.gd")
 const RightClickHandler = UtilsRemote.RightClickHandler
 const Options = UtilsRemote.Options
+const Confirm = UtilsRemote.Confirm
 
 const NUItemList = UtilsRemote.NUItemList
 const FSSmallPopup = UtilsRemote.FSSmallPopup
@@ -104,7 +105,7 @@ func _command_label(entry:Dictionary, paths:Array, selected_paths:Array) -> Stri
 
 func _changes_command(command:GitUtil.Command, paths:Array):
 	if command in GitUtil.COMMAND_DESTRUCTIVE:
-		if not await UtilsRemote.Dialog.confirm(_confirm_text(command, paths), self):
+		if not await Confirm.confirm(_confirm_text(command, paths), self):
 			return
 	changes_command.emit(command, paths)
 
