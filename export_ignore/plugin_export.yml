@@ -26,7 +26,8 @@ options:
 exports:
   -
     source: "res://addons/git_view"
-    export_folder: "git-view{{version=git_view}}/git_view"
+    export_name: "git-view{{version=git_view}}"
+    export_folder: "addons/git_view"
     exclude:
       directories:
         - "res://addons/git_view/export_ignore"
