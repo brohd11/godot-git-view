@@ -15,8 +15,8 @@ const ScriptListManager = preload("uid://d3o6grkkmk4qk") #! resolve ALibEditor.S
 
 const SettingHelperEditor = preload("uid://dnov6vp7pjnbb") #! resolve SettingHelper.Editor
 
-const RightClickHandler = preload("uid://mmtkf4h8er3m") #! resolve ClickHandlers.RightClickHandler
-const Options = preload("uid://c61qxuau2v0pb") #! resolve ALibRuntime.Popups.Options
+const RightClickHandler = preload("uid://cs6pl78crcr0g") #! resolve UtilR.Nodes.PopupMenus.Placer
+const Options = preload("uid://dxdxq2n3imf4q") #! resolve UtilR.Nodes.PopupMenus.Options
 
 
 const TabBarContainer = preload("uid://b7cxw711vl1jd") #! resolve ALibEditor.UIHelpers.Tab.TabBarContainer
