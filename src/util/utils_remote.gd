@@ -19,7 +19,7 @@ const RightClickHandler = preload("uid://cs6pl78crcr0g") #! resolve UtilR.Nodes.
 const Options = preload("uid://dxdxq2n3imf4q") #! resolve UtilR.Nodes.PopupMenus.Options
 
 
-const TabBarContainer = preload("uid://b7cxw711vl1jd") #! resolve ALibEditor.UIHelpers.Tab.TabBarContainer
+const TabBarContainer = preload("uid://dhohyyr2xlven") #! resolve UIRuntime.Tabs.TabBarContainer
 
 const UControl = preload("uid://cdo8rcof3ilt1") #! resolve UtilR.Nodes.UControl
 const UOs = preload("uid://dppsxjnth11uc") #! resolve UtilR.UOs
