@@ -1,7 +1,7 @@
 export_root: "res://addons/git_view/export_ignore/exports"
 plugin_folder: "GitView{{version=git_view}}"
-pre_script: "res://addons/git_view/export_ignore/pre_post_export.gd"
-post_script: "res://addons/git_view/export_ignore/pre_post_export.gd"
+pre_script: ""
+post_script: ""
 options:
   overwrite: true
   include_uid: true
