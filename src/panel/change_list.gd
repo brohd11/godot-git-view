@@ -11,7 +11,7 @@ const RightClickHandler = UtilsRemote.RightClickHandler
 const Options = UtilsRemote.Options
 const Confirm = UtilsRemote.Confirm
 
-const NUItemList = UtilsRemote.NUItemList
+const UItemList = UtilsRemote.UItemList
 const FSSmallPopup = UtilsRemote.FSSmallPopup
 
 var git_service:GitService
@@ -60,7 +60,7 @@ func _on_item_clicked(_index:int, _at_pos:Vector2, mouse_button:int):
 
 func _on_item_right_clicked():
 
-	var selected_paths = NUItemList.get_selected_meta(self)
+	var selected_paths = UItemList.get_selected_meta(self)
 	var options = Options.new()
 	if selected_paths.size() == 1:
 		var path = selected_paths[0]

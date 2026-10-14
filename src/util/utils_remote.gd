@@ -5,13 +5,13 @@
 const GitUtil = GitService.GitUtil
 const GitDiff = GitService.GitDiff
 
-const Confirm = preload("uid://b4rwv7tgks0b5") #! resolve ALibRuntime.Dialog.Handlers.Confirmation
+const Confirm = preload("uid://dwhlbgevd62gg") #! resolve Dialogs.Handlers.Confirmation
 
-const NUItemList = preload("uid://cjls86v1v4242") #! resolve ALibRuntime.NodeUtils.NUItemList
+const UItemList = preload("uid://bmkydws861tcb") #! resolve UtilR.Nodes.ItemLists.UItemList
 const FSSmallPopup = preload("uid://1gdu201y6jro") #! resolve EditorFS.Components.SmallPopup
 
 const EditorColors = preload("uid://cpw0fsrs38esk") #! resolve UtilE.Colors
-const ScriptListManager = preload("uid://d3o6grkkmk4qk") #! resolve ALibEditor.Singleton.ScriptListManager
+const ScriptListManager = preload("uid://esgr5a6b8qbw") #! resolve EditorNodes.ScriptListManager
 
 const SettingHelperEditor = preload("uid://dnov6vp7pjnbb") #! resolve SettingHelper.Editor
 
