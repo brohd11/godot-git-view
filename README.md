@@ -14,8 +14,8 @@ Compatible with godot 4.4+
 Tested on macOS and Linux primarily.
 
 ## Install
-This plugin uses external dependencies packaged with [Package Exporter]
-(https://github.com/brohd11/godot-plugin-exporter), download the latest package
+This plugin uses external dependencies packaged with [GDPackage]
+(https://github.com/brohd11/godot-gdpackage), download the latest package
  from releases, it includes the required dependencies.
 
 You can also use [gdaddon](https://github.com/brohd11/gdaddon) to manage the
