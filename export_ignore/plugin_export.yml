@@ -8,7 +8,6 @@ options:
   include_import: true
   ignore_src: true
   use_tag_in_cfg: true
-  exported_deps: []
   include_min_version: true
   move_global_files: true
   parser_settings:
@@ -28,15 +27,3 @@ exports:
     source: "res://addons/git_view"
     export_name: "git-view{{version=git_view}}"
     export_folder: "addons/git_view"
-    exclude:
-      directories:
-        - "res://addons/git_view/export_ignore"
-      file_extensions: []
-      files: []
-    other_transfers: []
-    parser_overide_settings:
-      parse_cs: {}
-      parse_gd: {}
-      parse_tscn: {}
-      parse_tres: {}
-    remote_dir: "res://addons/git_view/src/remote"
