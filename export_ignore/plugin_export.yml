@@ -11,15 +11,11 @@ options:
   include_min_version: true
   move_global_files: true
   parser_settings:
-    use_relative_paths: false
-    backport_target: 100
     parse_cs:
       namespace_rename: {}
     parse_gd:
       reduce_access_paths: true
-      replace_editor_interface: false
       class_rename_ignore: []
-      backport_string_renames: {}
     parse_tscn: {}
     parse_tres: {}
 exports:

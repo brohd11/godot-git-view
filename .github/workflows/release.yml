@@ -1,0 +1,20 @@
+# Builds and publishes this package on version tags with GDPackage. The tag must match
+# version= in the package cfg; deps are fetched by tag, so they need pushing first.
+# A manual run (Actions tab) builds the tag matching version= without publishing it.
+name: release
+on:
+  push:
+    tags: ["v*", "[0-9]*"]
+  workflow_dispatch:
+jobs:
+  release:
+    uses: brohd11/godot-gdpackage/.github/workflows/package-release.yml@main
+    with:
+      # Builds and verifies on this Godot; it must run everything the package and its deps use.
+      godot-version: "4.7-stable"
+      publish: ${{ github.event_name == 'push' }}
+    # For private dependencies: a token that can read them, kept as a secret of this repo.
+    # secrets:
+    #   deps-token: ${{ secrets.GDPACKAGE_DEPS_TOKEN }}
+    permissions:
+      contents: write
