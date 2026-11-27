@@ -13,6 +13,7 @@ jobs:
       # Builds and verifies on this Godot; it must run everything the package and its deps use.
       godot-version: "4.7-stable"
       publish: ${{ github.event_name == 'push' }}
+      release-notes: true
     # For private dependencies: a token that can read them, kept as a secret of this repo.
     # secrets:
     #   deps-token: ${{ secrets.GDPACKAGE_DEPS_TOKEN }}
